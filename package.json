@@ -1,0 +1,7 @@
+{
+  "name": "plasim-blocking-atlas",
+  "private": true,
+  "type": "module",
+  "description": "Static atlas of rare North Atlantic blocking events in a PlaSim simulation",
+  "scripts": { "test": "node --test" }
+}
