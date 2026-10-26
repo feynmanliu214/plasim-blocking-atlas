@@ -16,7 +16,7 @@ export const PANELS = [
 
 export class PanelSet {
   constructor(parent, idx, data) {
-    this.idx = idx; this.data = data; this.ev = data.meta; this.k = 0; this.maps = [];
+    this.idx = idx; this.data = data; this.ev = data.meta; this.k = 0; this.at = null; this.maps = [];
     this.lsm = lsmWindow(idx, this.ev);
     this.figs = PANELS.map((p, n) => {
       const title = p.title(idx.style);
@@ -24,7 +24,7 @@ export class PanelSet {
       const readout = el('div', { class: 'readout' }, ' ');
       const bar = el('canvas', { class: 'cbar', width: 320, height: 34, 'aria-hidden': 'true' });
       canvas.addEventListener('mousemove', (e) => this.hover(e, n, readout));
-      canvas.addEventListener('mouseleave', () => { readout.textContent = ' '; });
+      canvas.addEventListener('mouseleave', () => { this.at = null; readout.textContent = ' '; });
       return { p, canvas, bar, fig: el('figure', { class: 'fig' }, el('figcaption', {}, title), canvas, readout, bar) };
     });
     this.root = el('div', { class: 'panels' }, this.figs.map((f) => f.fig));
@@ -67,12 +67,20 @@ export class PanelSet {
       if (f.p.box) drawBox(ctx, map, this.ev, s);
       drawMarker(ctx, map, this.ev, s);
     });
+    this.showReadout();
   }
 
   hover(e, n, readout) {
     const map = this.maps[n], r = e.target.getBoundingClientRect();
     if (!map || !r.width) return;
     const lat = map.P.lat(((e.clientY - r.top) / r.height) * map.h), lon = map.P.lon(((e.clientX - r.left) / r.width) * map.w);
+    this.at = { readout, lat, lon };
+    this.showReadout();
+  }
+
+  showReadout() {
+    if (!this.at) return;
+    const { readout, lat, lon } = this.at;
     const g = this.idx.grid, i = rowCoord(lat, g.lat), j = colCoord(lon, this.ev.lon0, g.dlon, g.ncol);
     const v = (key) => bilinear(frameSlice(this.data.vars[key], this.k, g.nrow, g.ncol), g.nrow, g.ncol, i, j);
     readout.textContent = `${fmt(lat)}°N ${lonLabel(lon)} · Z500′ ${fmt(v('z500a'), 0)} m · v ${fmt(v('v250'))} · `

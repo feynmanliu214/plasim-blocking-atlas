@@ -6,7 +6,7 @@ import { PanelSet, drawReference } from './panels.js';
 import { timeline } from './timeline.js';
 import { frameDate, lonLabel } from './geo.js';
 import { notesPanel } from './notes.js';
-import { eventHref } from './router.js';
+import { eventHref, parseHash } from './router.js';
 
 export function renderEvent(root, app, route) {
   const ev = app.byId.get(route.id);
@@ -39,7 +39,10 @@ export function renderEvent(root, app, route) {
     const t = route.params.t;
     const offDraw = player.on((k) => panels.draw(k));
     // The URL follows the frame; stopUrl detaches before it pauses, so teardown never rewrites the next view's hash.
-    const stopUrl = follow(player, (k) => history.replaceState(null, '', eventHref(ev.id, app.idx.frames.t[k])));
+    const stopUrl = follow(player, (k) => {
+      const r = parseHash(location.hash);
+      if (r.view === 'event' && r.id === ev.id) history.replaceState(null, '', eventHref(ev.id, app.idx.frames.t[k]));
+    });
     player.set(t !== undefined && t !== '' && Number.isFinite(Number(t)) ? player.nearest(Number(t)) : 0);
     panels.draw(player.index);
     cleanup = [stopUrl, offDraw, tl.destroy, () => panels.destroy(), notes.destroy];

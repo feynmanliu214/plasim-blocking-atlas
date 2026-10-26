@@ -31,8 +31,8 @@ export function timeline(player, { dateOf = null } = {}) {
     const t = e.target;
     if (t && t.closest && t.closest('input[type=text], textarea, select')) return;
     if (e.key === ' ') { e.preventDefault(); player.toggle(); }
-    else if (e.key === 'ArrowLeft') { player.pause(); player.step(-1); }
-    else if (e.key === 'ArrowRight') { player.pause(); player.step(1); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); player.pause(); player.step(-1); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); player.pause(); player.step(1); }
   };
   document.addEventListener('keydown', onKey);
   const root = el('div', { class: 'timeline' }, prev, play, next, range, label, speed, el('label', {}, loop, ' loop'));
