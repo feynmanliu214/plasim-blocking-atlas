@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateIndex, decodeEvent, frameSlice, EventStore, loadThumbs } from '../js/data.js';
+import { validateIndex, decodeEvent, frameSlice, EventStore, loadThumbs, loadIndex } from '../js/data.js';
 import { makeIndex, eventBuffer, field } from './fixture.mjs';
 
 test('decodeEvent dequantises little-endian int16 per variable', () => {
@@ -55,4 +55,20 @@ test('loadThumbs checks sizes and dequantises z-bar', async () => {
   assert.deepEqual([...th.z5(0)].map((x) => Math.round(x * 10) / 10), [-2, -1, 0, 1, 2, 3]);
   assert.equal(th.region(0).length, 6);
   await assert.rejects(loadThumbs(idx, 'data/', async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(3) })), /sizes/);
+});
+
+test('loadIndex, EventStore, loadThumbs work with a receiver-strict fetch (browsers throw Illegal invocation on a non-global receiver)', async () => {
+  const idx = makeIndex({ nrow: 2, ncol: 3 });
+  const z = new ArrayBuffer(12), reg = new Uint8Array(6).fill(1);
+  function strictFetch(url) {
+    if (this !== undefined && this !== globalThis) throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation");
+    const body = url.includes('events/') ? eventBuffer(idx) : (url.endsWith('z5.bin') ? z : reg.buffer);
+    return Promise.resolve({ ok: true, json: async () => idx, arrayBuffer: async () => body });
+  }
+  assert.equal((await loadIndex('data/', strictFetch)).schema, idx.schema);
+  const id = idx.events[0].id;
+  const data = await new EventStore(idx, 'data/', strictFetch).get(id);
+  assert.equal(data.meta.id, id);
+  assert.ok(data.vars.z500a);
+  assert.equal((await loadThumbs(idx, 'data/', strictFetch)).region(0).length, 6);
 });

@@ -59,7 +59,8 @@ export class EventStore {
     const meta = this.byId.get(id);
     if (!meta) throw new Error(`unknown event ${id}`);
     const p = (async () => {
-      const r = await this.fetchFn(`${this.base}${meta.file}?v=${meta.sha256.slice(0, 12)}`);
+      const fetchFn = this.fetchFn;   // bare call: browsers require fetch's receiver to be the global object
+      const r = await fetchFn(`${this.base}${meta.file}?v=${meta.sha256.slice(0, 12)}`);
       if (!r.ok) throw new Error(`${meta.file}: HTTP ${r.status}`);
       const data = { meta, vars: decodeEvent(await r.arrayBuffer(), this.idx) };
       this.cache.set(id, data);
