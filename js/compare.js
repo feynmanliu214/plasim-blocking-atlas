@@ -52,7 +52,9 @@ export function renderCompare(root, app, route) {
       evs.map((e) => el('h3', { class: 'chead' }, el('a', { href: eventHref(e.id) }, e.id), ` · ${rankText(idx, e)} · ${rpText(e)} · s* ${e.date}`)));
     const bars = PANELS.map((p, r) => {
       const bar = colorbarFor(idx, p);
-      grid.append(el('p', { class: 'crow' }, panelTitle(p, idx.style)), ...sets.map((s) => s.figs[r].fig), el('div', { class: 'cbarrow' }, bar.node));
+      // Below 900 px the columns stack and the headings no longer sit above their maps: each map carries its event id.
+      const figs = sets.map((s, c) => { const f = s.figs[r].fig; f.prepend(el('p', { class: 'ctag' }, evs[c].id)); return f; });
+      grid.append(el('p', { class: 'crow' }, panelTitle(p, idx.style)), ...figs, el('div', { class: 'cbarrow' }, bar.node));
       return bar;
     });
     root.append(el('div', { class: 'sticky' }, tl.root, strip.root),
