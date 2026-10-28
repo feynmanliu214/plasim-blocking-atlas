@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extentOf, projector, rowCoord, rowLat, colCoord, bilinear, lonLabel, frameDate } from '../js/geo.js';
+import { extentOf, projector, rowCoord, rowLat, colCoord, bilinear, lonLabel, frameDate, domainOf, wrap180, colIndex } from '../js/geo.js';
 
 test('rowCoord interpolates Gaussian rows and clamps', () => {
   const rows = [20, 25, 32, 40];
@@ -33,4 +33,14 @@ test('lonLabel and frameDate', () => {
   assert.equal(frameDate('0723-01-05', 4.75), '0723-01-09 18 UTC');
   assert.equal(frameDate('0460-02-25', 4.75), '0460-02-29 18 UTC');       // proleptic Gregorian leap day
   assert.equal(frameDate('0007-12-01', -0.25), '0007-11-30 18 UTC');      // years below 100 stay literal
+});
+
+test('domainOf, wrap180 and colIndex (NaN outside the window, any unwrapping)', () => {
+  assert.deepEqual(domainOf({ centre: [60, 330] }, { half_width_deg: 120, lat_min_display: 20 }), { lonC: 330, half: 120, latS: 20 });
+  assert.deepEqual(domainOf({ centre: [60, 330] }, { half_width_deg: 120, lat_min_display: 20 }, 300).lonC, 300);
+  assert.equal(wrap180(190), -170); assert.equal(wrap180(-190), 170); assert.equal(wrap180(540), -180);
+  assert.equal(colIndex(194.0625, 194.0625, 2.8125, 89), 0);
+  assert.ok(Math.abs(colIndex(194.0625 + 360 + 5.625, 194.0625, 2.8125, 89) - 2) < 1e-9);
+  assert.equal(colIndex(194.0625 + 88 * 2.8125, 194.0625, 2.8125, 89), 88);
+  assert.ok(Number.isNaN(colIndex(194.0625 - 1, 194.0625, 2.8125, 89)) && Number.isNaN(colIndex(194.0625 + 89 * 2.8125, 194.0625, 2.8125, 89)));
 });

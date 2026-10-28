@@ -1,5 +1,22 @@
 // Display geometry (plan R13): an event's window of the T42 grid — rows ascending in latitude, columns eastward from
 // lon0 in steps of dlon — drawn in an equirectangular panel spanning the event's centre ± half_width_deg × lat_min..90 N.
+
+// The display domain of an event (plan R4): its centre longitude (or Compare's common one) ± half_width_deg, from
+// lat_min_display to the pole.
+export function domainOf(ev, grid, lonC = ev.centre[1]) {
+  return { lonC, half: grid.half_width_deg, latS: grid.lat_min_display };
+}
+
+export const wrap180 = (x) => ((((x % 360) + 540) % 360) - 180);
+
+// Fractional column of `lon` (any unwrapping) in the window lon0, lon0 + dlon, …, lon0 + (ncol - 1) dlon; NaN outside.
+export function colIndex(lon, lon0, dlon, ncol) {
+  let d = (((lon - lon0) % 360) + 360) % 360;
+  if (d > 360 - 1e-9) d = 0;
+  const j = d / dlon;
+  return j <= ncol - 1 + 1e-9 ? Math.min(j, ncol - 1) : NaN;
+}
+
 export function extentOf(ev, grid) {
   const c = ev.centre[1];
   return { lonW: c - grid.half_width_deg, lonE: c + grid.half_width_deg, latS: grid.lat_min_display, latN: 90 };

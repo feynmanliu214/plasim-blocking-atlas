@@ -34,3 +34,49 @@ export function contourSegments(vals, nrow, ncol, level) {
   }
   return out;
 }
+
+// The (nrow - 1) f + 1 by (ncol - 1) f + 1 grid of the field's bilinear interpolant (plan R5): marching squares on it
+// traces the interpolant's own level curves, the surface the shading shows. Divide its segment coordinates by f to get
+// back to the field's index space.
+export function refine(vals, nrow, ncol, f) {
+  const r = (nrow - 1) * f + 1, c = (ncol - 1) * f + 1, out = new Float32Array(r * c);
+  for (let I = 0; I < r; I++) {
+    const i0 = Math.min(Math.floor(I / f), nrow - 2), fi = I / f - i0;
+    for (let J = 0; J < c; J++) {
+      const j0 = Math.min(Math.floor(J / f), ncol - 2), fj = J / f - j0, k = i0 * ncol + j0;
+      out[I * c + J] = (1 - fi) * ((1 - fj) * vals[k] + fj * vals[k + 1]) + fi * ((1 - fj) * vals[k + ncol] + fj * vals[k + ncol + 1]);
+    }
+  }
+  return { vals: out, nrow: r, ncol: c, f };
+}
+
+// Marching-squares segments [i0, j0, i1, j1, ...] joined at shared end points into polylines [i, j, i, j, ...], so a
+// dash pattern runs along a whole line. Neighbouring cells compute a shared edge crossing identically, so end points
+// match exactly; a closed curve ends on its first point.
+export function chain(segs) {
+  const key = (a, b) => `${a},${b}`, ends = new Map(), n = segs.length / 4, used = new Uint8Array(n), lines = [];
+  for (let s = 0; s < n; s++) {
+    for (const e of [0, 2]) {
+      const k = key(segs[4 * s + e], segs[4 * s + e + 1]);
+      if (!ends.has(k)) ends.set(k, []);
+      ends.get(k).push(s);
+    }
+  }
+  for (let s0 = 0; s0 < n; s0++) {
+    if (used[s0]) continue;
+    used[s0] = 1;
+    const pts = segs.slice(4 * s0, 4 * s0 + 4);
+    for (const forward of [true, false]) {
+      for (;;) {
+        const a = forward ? pts[pts.length - 2] : pts[0], b = forward ? pts[pts.length - 1] : pts[1];
+        const next = (ends.get(key(a, b)) || []).find((s) => !used[s]);
+        if (next === undefined) break;
+        used[next] = 1;
+        const q = segs.slice(4 * next, 4 * next + 4), far = q[0] === a && q[1] === b ? [q[2], q[3]] : [q[0], q[1]];
+        if (forward) pts.push(far[0], far[1]); else pts.unshift(far[0], far[1]);
+      }
+    }
+    lines.push(pts);
+  }
+  return lines;
+}
