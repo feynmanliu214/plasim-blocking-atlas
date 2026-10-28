@@ -84,8 +84,7 @@ test('validateIndex (schema 2) requires the coastline, the series scale, each ev
   for (const [mutate, re] of cases) { const x = makeIndex(); mutate(x); assert.throws(() => validateIndex(x), re); }
 });
 
-test('during the switch, schema 1 still validates without the schema-2 keys', () => {
-  const x = makeIndex(); x.schema = 'blockform01-site/1'; delete x.coast; delete x.style.series;
-  for (const e of x.events) { delete e.series; delete e.rp_display; }
-  assert.ok(validateIndex(x));
+test('validateIndex refuses schema 1', () => {
+  const x = makeIndex(); x.schema = 'blockform01-site/1';
+  assert.throws(() => validateIndex(x), /schema/);
 });
