@@ -1,5 +1,5 @@
-// One event (owner O3-O5, O8 A): the three panels on the shared timeline, its metadata, the five-day-mean reference map
-// with the region and centre (interview I4), and its notes (O8 C).
+// One event (owner O3-O5, O8 A; plan R7): the sticky timeline and series strip over the four maps (the fourth is the
+// five-day mean with the region and centre, interview I4), its metadata, and its notes (O8 C).
 import { el, fmt, groupLabel, rankText, rpText } from './ui.js';
 import { Player, follow } from './player.js';
 import { PanelSet } from './panels.js';

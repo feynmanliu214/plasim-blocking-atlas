@@ -81,6 +81,5 @@ canvas.series { width: 100%; height: 96px; display: block; color: var(--fg); cur
 .banner { background: color-mix(in srgb, var(--hyp) 15%, var(--card)); border: 1px solid var(--line); padding: 6px 10px; border-radius: 6px; }
 .msg { font-size: 13px; color: var(--muted); min-height: 1.2em; margin: 0; }
 @media (max-width: 900px) {
-  #view.view-event { grid-template-columns: minmax(0, 1fr); }
   .cgrid { grid-template-columns: minmax(0, 1fr); } .cgrid > .crow, .cgrid > .cbarrow { grid-column: auto; }
 }
