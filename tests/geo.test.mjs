@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extentOf, projector, rowCoord, rowLat, colCoord, bilinear, lonLabel, frameDate, domainOf, wrap180, colIndex } from '../js/geo.js';
+import { rowCoord, rowLat, bilinear, lonLabel, frameDate, domainOf, wrap180, colIndex } from '../js/geo.js';
 
 test('rowCoord interpolates Gaussian rows and clamps', () => {
   const rows = [20, 25, 32, 40];
@@ -11,19 +11,11 @@ test('rowCoord interpolates Gaussian rows and clamps', () => {
   for (const i of [0, 0.3, 1.5, 2.9, 3]) assert.ok(Math.abs(rowCoord(rowLat(i, rows), rows) - i) < 1e-12);
 });
 
-test('colCoord, bilinear and the projector', () => {
-  assert.equal(colCoord(194.0625 + 2 * 2.8125, 194.0625, 2.8125, 89), 2);
-  assert.equal(colCoord(0, 194.0625, 2.8125, 89), 0);
-  assert.equal(colCoord(1e4, 194.0625, 2.8125, 89), 88);
+test('bilinear interpolates the four corners', () => {
   const vals = Float32Array.from({ length: 12 }, (_, q) => 2 * Math.floor(q / 4) + 3 * (q % 4));
   assert.equal(bilinear(vals, 3, 4, 1, 2), 8);
   assert.ok(Math.abs(bilinear(vals, 3, 4, 1.25, 2.5) - 10) < 1e-9);
   assert.equal(bilinear(vals, 3, 4, 2, 3), 13);
-  const ext = extentOf({ centre: [60, 330] }, { half_width_deg: 120, lat_min_display: 20 });
-  assert.deepEqual(ext, { lonW: 210, lonE: 450, latS: 20, latN: 90 });
-  const P = projector(ext, 720, 210);
-  assert.equal(P.x(210), 0); assert.equal(P.x(450), 720); assert.equal(P.y(90), 0); assert.equal(P.y(20), 210);
-  assert.ok(Math.abs(P.lon(P.x(333.3)) - 333.3) < 1e-9 && Math.abs(P.lat(P.y(61.2)) - 61.2) < 1e-9);
 });
 
 test('lonLabel and frameDate', () => {

@@ -1,7 +1,7 @@
 // (A) The gallery (owner O8): filter by RP group, sort, one card per event with its five-day-mean map, its metadata and
 // a compare toggle. Thumbnails are drawn as the cards scroll into view.
 import { el, fmt, fmtRP, groupLabel } from './ui.js';
-import { drawReference } from './panels.js';
+import { drawThumb } from './panels.js';
 import { eventHref } from './router.js';
 import { lonLabel } from './geo.js';
 
@@ -26,12 +26,12 @@ export function renderGallery(root, app, route) {
     for (const en of entries) {
       if (!en.isIntersecting) continue;
       const e = app.byId.get(en.target.dataset.id);
-      drawReference(en.target, idx, e, app.thumbs.z5(e.thumb), app.thumbs.region(e.thumb), 0.5);
+      drawThumb(en.target, idx, e, { z5: app.thumbs.z5(e.thumb), region: app.thumbs.region(e.thumb) });
       io.unobserve(en.target);
     }
   }, { rootMargin: '300px' });
   for (const e of evs) {
-    const thumb = el('canvas', { class: 'thumb', width: 412, height: 120, 'data-id': e.id, role: 'img',
+    const thumb = el('canvas', { class: 'thumb', width: 400, height: 300, 'data-id': e.id, role: 'img',
       'aria-label': `Five-day-mean Z500 anomaly from s*, ${e.id}` });
     const add = el('button', { class: 'btn small', type: 'button' });
     const paint = () => {

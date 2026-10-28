@@ -2,7 +2,7 @@
 // with the region and centre (interview I4), and its notes (O8 C).
 import { el, fmt, fmtRP, groupLabel } from './ui.js';
 import { Player, follow } from './player.js';
-import { PanelSet, drawReference } from './panels.js';
+import { PanelSet } from './panels.js';
 import { timeline } from './timeline.js';
 import { frameDate, lonLabel } from './geo.js';
 import { notesPanel } from './notes.js';
@@ -29,11 +29,7 @@ export function renderEvent(root, app, route) {
     root.append(main, side);
     const tl = timeline(player, { dateOf: (t) => frameDate(ev.date, t) });
     main.append(tl.root);
-    const panels = new PanelSet(main, app.idx, data);
-    const ref = el('canvas', { class: 'panel', width: 720, height: 210, role: 'img', 'aria-label': `Five-day-mean Z500 anomaly from s*, ${ev.id}` });
-    side.append(el('figure', { class: 'fig' },
-      el('figcaption', {}, 'Five-day mean s* … s*+4: Z500 anomaly, region z̄ ≥ ½·M (bold), peak patch (dashed), centre (×)'), ref));
-    drawReference(ref, app.idx, ev, app.thumbs.z5(ev.thumb), app.thumbs.region(ev.thumb));
+    const panels = new PanelSet(main, app.idx, data, { z5: app.thumbs.z5(ev.thumb), region: app.thumbs.region(ev.thumb) });
     const notes = notesPanel(app, ev, player);
     side.append(notes.root);
     const t = route.params.t;

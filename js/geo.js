@@ -1,5 +1,6 @@
-// Display geometry (plan R13): an event's window of the T42 grid — rows ascending in latitude, columns eastward from
-// lon0 in steps of dlon — drawn in an equirectangular panel spanning the event's centre ± half_width_deg × lat_min..90 N.
+// Display geometry (plan R4, R13): an event's window of the T42 grid — rows ascending in latitude, columns eastward from
+// lon0 in steps of dlon — and the display domain, the event's centre ± half_width_deg × lat_min..90 N, that js/proj.js
+// maps to a polar-stereographic panel.
 
 // The display domain of an event (plan R4): its centre longitude (or Compare's common one) ± half_width_deg, from
 // lat_min_display to the pole.
@@ -15,19 +16,6 @@ export function colIndex(lon, lon0, dlon, ncol) {
   if (d > 360 - 1e-9) d = 0;
   const j = d / dlon;
   return j <= ncol - 1 + 1e-9 ? Math.min(j, ncol - 1) : NaN;
-}
-
-export function extentOf(ev, grid) {
-  const c = ev.centre[1];
-  return { lonW: c - grid.half_width_deg, lonE: c + grid.half_width_deg, latS: grid.lat_min_display, latN: 90 };
-}
-
-export function projector(ext, w, h) {
-  const sx = w / (ext.lonE - ext.lonW), sy = h / (ext.latN - ext.latS);
-  return {
-    x: (lon) => (lon - ext.lonW) * sx, y: (lat) => (ext.latN - lat) * sy,
-    lon: (x) => ext.lonW + x / sx, lat: (y) => ext.latN - y / sy,
-  };
 }
 
 // Fractional row of `lat` on ascending, unevenly spaced (Gaussian) row latitudes, clamped to [0, n - 1].
@@ -46,11 +34,6 @@ export function rowCoord(lat, rows) {
 export function rowLat(i, rows) {
   const i0 = Math.min(Math.max(Math.floor(i), 0), rows.length - 2);
   return rows[i0] + (i - i0) * (rows[i0 + 1] - rows[i0]);
-}
-
-export function colCoord(lon, lon0, dlon, ncol) {
-  const j = (lon - lon0) / dlon;
-  return j < 0 ? 0 : j > ncol - 1 ? ncol - 1 : j;
 }
 
 export function bilinear(vals, nrow, ncol, i, j) {

@@ -36,7 +36,7 @@ export function renderCompare(root, app, route) {
       const col = el('section', { class: 'ccol' }, el('h3', {}, el('a', { href: eventHref(e.id) }, e.id),
         ` · ${groupLabel(app.idx, e.group)} · RP ${fmtRP(e.rp)} · s* ${e.date}`));
       cols.append(col);
-      return new PanelSet(col, app.idx, d);
+      return new PanelSet(col, app.idx, d, { z5: app.thumbs.z5(d.meta.thumb), region: app.thumbs.region(d.meta.thumb) });
     });
     const off = player.on((k) => { for (const s of sets) s.draw(k); });
     for (const s of sets) s.draw(0);

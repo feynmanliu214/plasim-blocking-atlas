@@ -41,7 +41,9 @@ canvas.thumb, canvas.panel { width: 100%; height: auto; display: block; border-r
 .g-rp1000 { background: var(--g-rp1000); } .g-rp100 { background: var(--g-rp100); } .g-rp10 { background: var(--g-rp10); }
 #view.view-event { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 16px; align-items: start; }
 #view.view-event > .evhead, #view.view-event > .status, #view.view-event > .banner { grid-column: 1 / -1; }
-.panels { display: flex; flex-direction: column; gap: 10px; }
+.panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; align-items: start; }
+.panels canvas.panel { max-width: var(--map-max-w, calc((100vh - 290px) / 2 * 4 / 3)); margin: 0 auto; }
+@media (max-width: 900px) { .panels { grid-template-columns: minmax(0, 1fr); } .panels canvas.panel { max-width: 100%; } }
 .fig { margin: 0; }
 figcaption { font-size: 13px; color: var(--muted); margin-bottom: 2px; }
 .readout { font: 12px/1.3 ui-monospace, Menlo, monospace; color: var(--muted); min-height: 1.3em; }
