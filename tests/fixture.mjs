@@ -31,19 +31,23 @@ export function makeIndex({ nrow = 25, ncol = 89, events = [{ id: 'E0001', group
     return { rp: 53821 / e.rank, M_y: 500, date: '0723-01-05', s_star: 35, peak: [65.5776, 306.5625],
       patch_box: [58.6, 71.2, 299.5, 313.6], col0: (((jc - 44) % 128) + 128) % 128, lon0: (jc - 44) * 2.8125, cells: 120,
       flags: { seed_fallback: false, multi_component: false, touches_south: false, polar_ring: false },
-      file: `events/${e.id}.bin`, bytes, sha256: '', thumb: k, ...e };
+      file: `events/${e.id}.bin`, bytes, sha256: '', thumb: k, rp_display: '54,000',
+      series: t.map((x) => Math.round(3000 * Math.exp(-((x - 2) ** 2) / 8)) / 10), ...e };
   });
   return {
-    schema: 'blockform01-site/1', build: { attempt: 'test', smoke: true }, pool: { n_seasons: 53820, n_pool: 5382, rp_min: 10 },
+    schema: 'blockform01-site/2', build: { attempt: 'test', smoke: true }, pool: { n_seasons: 53820, n_pool: 5382, rp_min: 10 },
     grid: { lat, nrow, ncol, nlon: 128, dlon: 2.8125, lat_min_display: 20, half_width_deg: 120 },
     frames: { t, daily_to: -5, step_hours: 6, window: [0, 5] }, vars: VARS,
     style: { z500a: { cmap: 'RdBu_r', lim: [-400, 400], contours: [-300, -200, -100, 100, 200, 300] },
       v250: { cmap: 'PuOr_r', lim: [-40, 40] }, spd250: { contours: [30, 40, 50, 60] },
-      psl: { cmap: 'viridis', lim: [980, 1040], contours: Array.from({ length: 16 }, (_, k) => 980 + 4 * k) } },
+      psl: { cmap: 'viridis', lim: [980, 1040], contours: Array.from({ length: 16 }, (_, k) => 980 + 4 * k) },
+      series: { lim: [-400, 700] } },
     cmaps: { RdBu_r: LUT, PuOr_r: LUT, viridis: LUT },
     lsm: Array.from({ length: nrow }, (_, i) => Array.from({ length: 128 }, (_, j) => (i > 10 && i < 16 && j > 100 && j < 110 ? '1' : '0')).join('')),
+    coast: { source: 'test coastline', lat_min: 15, lines: [[-70, 50, -60, 58, -50, 62, -40, 60], [10, 70, 20, 72]] },
     thumbs: { z5: 'thumbs-z5.bin', region: 'thumbs-region.bin' },
-    groups: [{ key: 'rp1000', label: 'RP > 1000', n: evs.length, rule: 'every pool season with RP > 1000' }],
+    groups: [{ key: 'rp1000', label: 'RP ≈ 1,000–54,000', n: evs.length, rule: 'all 53 seasons ranked 1–53 (RP > 1,000)',
+      ranks: [1, 53], rp: [1015.491, 53821], band: { ranks: [1, 53], n: 53 } }],
     events: evs, limitations: ['test limitation'],
   };
 }
@@ -61,7 +65,7 @@ export function eventBuffer(idx, fn = field) {
   return buf;
 }
 
-export function writeSite(dir, opts) {
+export function writeSite(dir, opts, mutate = null) {
   const idx = makeIndex(opts), n = idx.grid.nrow * idx.grid.ncol, ne = idx.events.length;
   mkdirSync(join(dir, 'events'), { recursive: true });
   const files = {};
@@ -73,6 +77,7 @@ export function writeSite(dir, opts) {
   for (let q = 0; q < n * ne; q++) { tz.writeInt16LE(Math.round(100 * Math.sin(q / 50)), 2 * q); tr[q] = q % 7 === 0 ? 1 : 0; }
   files[idx.thumbs.z5] = tz;
   files[idx.thumbs.region] = tr;
+  if (mutate) mutate(idx);
   files['index.json'] = Buffer.from(JSON.stringify(idx));
   const names = Object.keys(files).sort();
   for (const f of names) writeFileSync(join(dir, f), files[f]);

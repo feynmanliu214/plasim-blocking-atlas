@@ -41,3 +41,17 @@ test('render-frame writes a PNG of the three panels', () => {
     assert.equal(png.readUInt32BE(20), 3 * 210);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('check-site counts events per group and refuses a count the index misstates', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'atlas-')), opts = { events: ['E0001', 'E0002'].map((id, k) => ({ id, group: 'rp1000', rank: k + 1, centre: [64.2, 318.4] })) };
+  try {
+    writeSite(join(dir, 'a'), opts);
+    let r = node(['tools/check-site.mjs', join(dir, 'a')]);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.deepEqual(JSON.parse(r.stdout).groups, { rp1000: 2 });
+    writeSite(join(dir, 'b'), opts, (x) => { x.groups[0].n = 5; });
+    r = node(['tools/check-site.mjs', join(dir, 'b')]);
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /group rp1000: 2 events, index says 5/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

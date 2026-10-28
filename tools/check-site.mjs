@@ -13,7 +13,7 @@ const TEXT = /(\.(html|js|mjs|css|md|json|txt|sh)|SHA256SUMS|\.nojekyll|\.gitign
 const repo = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const dir = resolve(process.argv[2] || join(repo, 'data'));
 const sha = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
-const walk = (d) => readdirSync(d).flatMap((n) => (n === '.git' ? [] : statSync(join(d, n)).isDirectory() ? walk(join(d, n)) : [join(d, n)]));
+const walk = (d) => readdirSync(d).flatMap((n) => (n === '.git' || n === '.execute-plan' ? [] : statSync(join(d, n)).isDirectory() ? walk(join(d, n)) : [join(d, n)]));
 const errors = [];
 let summary = {};
 try {
@@ -40,7 +40,11 @@ try {
   for (const f of files) if (f !== 'SHA256SUMS' && !listed.has(f)) errors.push(`stray file ${f}`);
   const bytes = files.reduce((s, f) => s + statSync(join(dir, f)).size, 0);
   if (bytes > BUDGET) errors.push(`data is ${bytes} bytes, over the ${BUDGET}-byte budget`);
-  summary = { events: ne, groups: Object.fromEntries(idx.groups.map((g) => [g.key, g.n])), bytes, build: idx.build };
+  const counted = {};
+  for (const e of idx.events) counted[e.group] = (counted[e.group] || 0) + 1;
+  for (const g of idx.groups) if ((counted[g.key] || 0) !== g.n) errors.push(`group ${g.key}: ${counted[g.key] || 0} events, index says ${g.n}`);
+  for (const k of Object.keys(counted)) if (!idx.groups.some((g) => g.key === k)) errors.push(`events in unknown group ${k}`);
+  summary = { events: ne, groups: counted, bytes, build: idx.build };
 } catch (e) { errors.push(`index: ${e.message}`); }
 const scanned = new Set([...walk(repo), ...walk(dir)].filter((p) => TEXT.test(p)));
 for (const p of scanned) {

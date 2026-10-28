@@ -1,10 +1,28 @@
 // Site data (plan R9, R13): index.json, each event's int16 bin (fetched when first opened, kept in a small LRU) and
 // the gallery thumbnails. Pure apart from `fetch`, which callers may replace (tests, tools).
-export const SCHEMA = 'blockform01-site/1';
+export const SCHEMA = 'blockform01-site/2';
+const ACCEPTED = ['blockform01-site/1', SCHEMA];          // the switch (plan R11); Step 7 removes /1
 const NEEDED = ['z500a', 'v250', 'spd250', 'psl'];
 
+// Schema 2's additions (plan R11): the coastline, the series scale, each event's series and RP text, known groups.
+function validateV2(idx) {
+  const nf = idx.frames.t.length, groups = new Set(idx.groups.map((g) => g.key));
+  const c = idx.coast;
+  if (!c || !Array.isArray(c.lines) || !c.lines.length || c.lines.some((l) => !Array.isArray(l) || l.length < 4 || l.length % 2)) {
+    throw new Error('index.json coastline is missing or malformed');
+  }
+  if (!idx.style.series || !Array.isArray(idx.style.series.lim) || idx.style.series.lim.length !== 2) {
+    throw new Error('index.json lacks the series scale');
+  }
+  for (const e of idx.events) {
+    if (!groups.has(e.group)) throw new Error(`event ${e.id}: unknown group ${e.group}`);
+    if (!Array.isArray(e.series) || e.series.length !== nf || !e.series.every(Number.isFinite)) throw new Error(`event ${e.id}: series`);
+    if (typeof e.rp_display !== 'string' || !e.rp_display) throw new Error(`event ${e.id}: rp_display`);
+  }
+}
+
 export function validateIndex(idx) {
-  if (!idx || idx.schema !== SCHEMA) throw new Error(`index.json schema ${idx && idx.schema} is not ${SCHEMA}`);
+  if (!idx || !ACCEPTED.includes(idx.schema)) throw new Error(`index.json schema ${idx && idx.schema} is not ${SCHEMA}`);
   const g = idx.grid, nf = idx.frames.t.length;
   if (g.lat.length !== g.nrow || idx.lsm.length !== g.nrow || idx.lsm.some((r) => r.length !== g.nlon)) {
     throw new Error('index.json grid or land-sea mask has the wrong shape');
@@ -14,6 +32,7 @@ export function validateIndex(idx) {
   for (const k of ['z500a', 'v250', 'psl']) if (!idx.cmaps[idx.style[k].cmap]) throw new Error(`index.json lacks colormap for ${k}`);
   const bytes = idx.vars.length * nf * g.nrow * g.ncol * 2;
   for (const e of idx.events) if (e.bytes !== bytes) throw new Error(`event ${e.id}: ${e.bytes} bytes, expected ${bytes}`);
+  if (idx.schema === SCHEMA) validateV2(idx);
   return idx;
 }
 

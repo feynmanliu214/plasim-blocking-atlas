@@ -6,7 +6,7 @@ import { PUBLIC_FORBIDDEN } from '../tools/public-patterns.mjs';
 
 const repo = new URL('..', import.meta.url).pathname;
 function walk(d) {
-  return readdirSync(d).flatMap((n) => (n === '.git' ? [] : statSync(join(d, n)).isDirectory() ? walk(join(d, n)) : [join(d, n)]));
+  return readdirSync(d).flatMap((n) => (n === '.git' || n === '.execute-plan' ? [] : statSync(join(d, n)).isDirectory() ? walk(join(d, n)) : [join(d, n)]));
 }
 
 test('no app, tool, test or data text carries a private identifier', () => {

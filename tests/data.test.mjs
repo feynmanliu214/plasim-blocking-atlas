@@ -72,3 +72,20 @@ test('loadIndex, EventStore, loadThumbs work with a receiver-strict fetch (brows
   assert.ok(data.vars.z500a);
   assert.equal((await loadThumbs(idx, 'data/', strictFetch)).region(0).length, 6);
 });
+
+test('validateIndex (schema 2) requires the coastline, the series scale, each event series and RP text, and known groups', () => {
+  assert.ok(validateIndex(makeIndex()));
+  const cases = [
+    [(x) => { delete x.coast; }, /coast/], [(x) => { x.coast.lines.push([1, 2, 3]); }, /coast/],
+    [(x) => { delete x.style.series; }, /series scale/], [(x) => { x.events[0].series.pop(); }, /series/],
+    [(x) => { x.events[0].series[3] = null; }, /series/], [(x) => { x.events[0].rp_display = ''; }, /rp_display/],
+    [(x) => { x.events[0].group = 'rp7'; }, /unknown group/],
+  ];
+  for (const [mutate, re] of cases) { const x = makeIndex(); mutate(x); assert.throws(() => validateIndex(x), re); }
+});
+
+test('during the switch, schema 1 still validates without the schema-2 keys', () => {
+  const x = makeIndex(); x.schema = 'blockform01-site/1'; delete x.coast; delete x.style.series;
+  for (const e of x.events) { delete e.series; delete e.rp_display; }
+  assert.ok(validateIndex(x));
+});

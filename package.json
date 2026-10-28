@@ -3,5 +3,5 @@
   "private": true,
   "type": "module",
   "description": "Static atlas of rare North Atlantic blocking events in a PlaSim simulation",
-  "scripts": { "test": "node --test" }
+  "scripts": { "test": "node --test --test-concurrency=1 tests/" }
 }
