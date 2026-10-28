@@ -4,6 +4,7 @@ import { el, fmt, fmtRP, groupLabel } from './ui.js';
 import { Player, follow } from './player.js';
 import { PanelSet } from './panels.js';
 import { timeline } from './timeline.js';
+import { seriesChart } from './series.js';
 import { frameDate, lonLabel } from './geo.js';
 import { notesPanel } from './notes.js';
 import { eventHref, parseHash } from './router.js';
@@ -27,8 +28,9 @@ export function renderEvent(root, app, route) {
     const player = new Player(app.idx.frames.t);
     const main = el('div', { class: 'evmain' }), side = el('aside', { class: 'evside' });
     root.append(main, side);
-    const tl = timeline(player, { dateOf: (t) => frameDate(ev.date, t) });
-    main.append(tl.root);
+    const tl = timeline(player, { dateOf: (t) => frameDate(ev.date, t), frames: app.idx.frames });
+    const strip = seriesChart(app.idx, [ev], player);
+    main.append(el('div', { class: 'sticky' }, tl.root, strip.root));
     const panels = new PanelSet(main, app.idx, data, { z5: app.thumbs.z5(ev.thumb), region: app.thumbs.region(ev.thumb) });
     const notes = notesPanel(app, ev, player);
     side.append(notes.root);
@@ -41,7 +43,7 @@ export function renderEvent(root, app, route) {
     });
     player.set(t !== undefined && t !== '' && Number.isFinite(Number(t)) ? player.nearest(Number(t)) : 0);
     panels.draw(player.index);
-    cleanup = [stopUrl, offDraw, tl.destroy, () => panels.destroy(), notes.destroy];
+    cleanup = [stopUrl, offDraw, tl.destroy, strip.destroy, () => panels.destroy(), notes.destroy];
   }).catch((e) => { status.textContent = `Could not load ${ev.id}: ${e.message}`; });
   return { destroy: () => { alive = false; for (const f of cleanup) f(); } };
 }

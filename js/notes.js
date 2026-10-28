@@ -45,7 +45,7 @@ export function notesPanel(app, ev, player) {
     type: 'button', class: `chip${chosen.has(t) ? ' on' : ''}`, 'aria-pressed': chosen.has(t) ? 'true' : 'false',
     onclick: () => { if (chosen.has(t)) chosen.delete(t); else chosen.add(t); drawTags(); } }, t)));
   const drawList = () => list.replaceChildren(...store.list({ event: ev.id })
-    .map((a) => noteItem(app, a, { onJump: (t) => player.set(player.nearest(t)) })));
+    .map((a) => noteItem(app, a, { onJump: (t) => { player.pause(); player.set(player.nearest(t)); } })));
   const addTag = el('button', { class: 'btn small', type: 'button', onclick: () => {
     try { chosen.add(store.addTag(newTag.value)); newTag.value = ''; drawTags(); } catch (e) { msg.textContent = e.message; }
   } }, 'Add tag');

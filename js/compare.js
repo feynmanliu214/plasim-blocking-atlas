@@ -4,6 +4,7 @@ import { el, fmtRP, groupLabel } from './ui.js';
 import { Player } from './player.js';
 import { PanelSet } from './panels.js';
 import { timeline } from './timeline.js';
+import { seriesChart } from './series.js';
 import { compareHref, eventHref } from './router.js';
 
 function trayBar(app) {
@@ -28,9 +29,10 @@ export function renderCompare(root, app, route) {
     if (!alive) return;
     status.remove();
     const player = new Player(app.idx.frames.t);
-    const tl = timeline(player);
+    const tl = timeline(player, { frames: app.idx.frames });
+    const strip = seriesChart(app.idx, datas.map((d) => d.meta), player);
     const cols = el('div', { class: `compare n${ids.length}` });
-    root.append(el('p', { class: 'meta' }, 'Each column is centred on its own event (± 120°); all share the timeline, the frame times and the colour scales.'), tl.root, cols);
+    root.append(el('p', { class: 'meta' }, 'Each column is centred on its own event (± 120°); all share the timeline, the frame times and the colour scales.'), el('div', { class: 'sticky' }, tl.root, strip.root), cols);
     const sets = datas.map((d) => {
       const e = d.meta;
       const col = el('section', { class: 'ccol' }, el('h3', {}, el('a', { href: eventHref(e.id) }, e.id),
@@ -40,7 +42,7 @@ export function renderCompare(root, app, route) {
     });
     const off = player.on((k) => { for (const s of sets) s.draw(k); });
     for (const s of sets) s.draw(0);
-    cleanup = [off, () => player.pause(), tl.destroy, ...sets.map((s) => () => s.destroy())];
+    cleanup = [off, () => player.pause(), tl.destroy, strip.destroy, ...sets.map((s) => () => s.destroy())];
   }).catch((e) => { status.textContent = `Could not load: ${e.message}`; });
   return { destroy: () => { alive = false; for (const f of cleanup) f(); } };
 }
