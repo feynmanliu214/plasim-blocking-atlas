@@ -66,6 +66,14 @@ test('PanelSet sizes its maps at the device pixel ratio, draws each with drawPan
   assert.equal(ps.map.dom.lonC, ev.centre[1]);
 });
 
+test('PanelSet re-maps at the new device pixel ratio when only the ratio changes (browser zoom: same device pixels)', () => {
+  CSS_W = 300; globalThis.devicePixelRatio = 2;
+  const ps = new PanelSet(null, idx, data, ref);
+  CSS_W = 600; globalThis.devicePixelRatio = 1;
+  assert.equal(ps.resize(), true);
+  assert.equal(ps.dpr, 1);
+});
+
 test('drawThumb and the colour bar are sized at the device pixel ratio; the unshaded panel gets the isobar legend', () => {
   CSS_W = 260; globalThis.devicePixelRatio = 2;
   const c = new FakeEl('canvas');

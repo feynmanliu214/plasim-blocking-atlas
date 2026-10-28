@@ -51,7 +51,7 @@ export class PanelSet {
     const dpr = dprOf(), css = this.figs[0].canvas.clientWidth || 360;
     const w = Math.max(240, Math.round(css * dpr)), h = Math.round(w / aspect(this.idx.grid));
     for (const f of this.figs) if (f.bar) f.bar.paint();
-    if (this.map && this.map.w === w && this.map.h === h) return false;
+    if (this.map && this.map.w === w && this.map.h === h && this.dpr === dpr) return false;
     this.dpr = dpr;
     this.map = pixelMap(this.idx.grid, this.ev, w, h, this.lonC ?? this.ev.centre[1]);
     for (const f of this.figs) { f.canvas.width = w; f.canvas.height = h; }
