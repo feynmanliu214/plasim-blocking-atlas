@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateIndex, decodeEvent, frameSlice, EventStore, loadThumbs, loadIndex } from '../js/data.js';
+import { validateIndex, decodeEvent, frameSlice, EventStore, loadThumbs, loadIndex, varMeta } from '../js/data.js';
 import { makeIndex, eventBuffer, field } from './fixture.mjs';
 
 test('decodeEvent dequantises little-endian int16 per variable', () => {
@@ -30,18 +30,18 @@ test('validateIndex refuses another schema, a wrong event size or a wrong mask s
 test('EventStore fetches each event once, shares a pending fetch and evicts the least recently used', async () => {
   const idx = makeIndex({ nrow: 3, ncol: 4, events: ['E0001', 'E0002', 'E0003'].map((id, k) => ({ id, group: 'rp1000', rank: k + 1, centre: [60, 330] })) });
   const calls = [];
-  const fetchFn = async (url) => { calls.push(url); return { ok: true, arrayBuffer: async () => eventBuffer(idx) }; };
+  const fetchFn = async (url) => { calls.push(url); return { ok: true, arrayBuffer: async () => (url.includes('.lwa.bin') ? eventBuffer(idx, field, idx.lwa.vars) : eventBuffer(idx)) }; };
   const s = new EventStore(idx, 'data/', fetchFn, 2);
   const [a, b] = await Promise.all([s.get('E0001'), s.get('E0001')]);
   assert.equal(a, b);
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2);
   assert.match(calls[0], /^data\/events\/E0001\.bin\?v=/);
   await s.get('E0002'); await s.get('E0001'); await s.get('E0003');          // E0002 is now the least recently used
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 6);
   await s.get('E0001');
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 6);
   await s.get('E0002');
-  assert.equal(calls.length, 4);
+  assert.equal(calls.length, 8);
   await assert.rejects(s.get('E9999'), /unknown event/);
 });
 
@@ -62,7 +62,7 @@ test('loadIndex, EventStore, loadThumbs work with a receiver-strict fetch (brows
   const z = new ArrayBuffer(12), reg = new Uint8Array(6).fill(1);
   function strictFetch(url) {
     if (this !== undefined && this !== globalThis) throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation");
-    const body = url.includes('events/') ? eventBuffer(idx) : (url.endsWith('z5.bin') ? z : reg.buffer);
+    const body = url.includes('.lwa.bin') ? eventBuffer(idx, field, idx.lwa.vars) : url.includes('events/') ? eventBuffer(idx) : (url.endsWith('z5.bin') ? z : reg.buffer);
     return Promise.resolve({ ok: true, json: async () => idx, arrayBuffer: async () => body });
   }
   assert.equal((await loadIndex('data/', strictFetch)).schema, idx.schema);
@@ -70,6 +70,7 @@ test('loadIndex, EventStore, loadThumbs work with a receiver-strict fetch (brows
   const data = await new EventStore(idx, 'data/', strictFetch).get(id);
   assert.equal(data.meta.id, id);
   assert.ok(data.vars.z500a);
+  assert.ok(data.vars.lwa_a && data.vars.lwa_c);
   assert.equal((await loadThumbs(idx, 'data/', strictFetch)).region(0).length, 6);
 });
 
@@ -88,4 +89,40 @@ test('validateIndex (schema 2) requires the coastline, the series scale, each ev
 test('validateIndex refuses schema 1', () => {
   const x = makeIndex(); x.schema = 'blockform01-site/1';
   assert.throws(() => validateIndex(x), /schema/);
+});
+
+test('validateIndex (schema 3) requires the LWA variables, their scale and line step, and each event LWA file', () => {
+  assert.ok(validateIndex(makeIndex()));
+  const cases = [
+    [(x) => { delete x.lwa; }, /LWA variables/], [(x) => { x.lwa.vars = x.lwa.vars.slice(0, 1); }, /lwa_c/],
+    [(x) => { delete x.style.lwa_a; }, /LWA colour scale/], [(x) => { x.style.lwa_a.lim = [0, 0]; }, /LWA colour scale/],
+    [(x) => { delete x.cmaps.YlOrRd; }, /LWA colour scale/], [(x) => { x.style.lwa_c.step = 0; }, /line step/],
+    [(x) => { delete x.events[0].lwa_file; }, /lwa_file/], [(x) => { x.events[0].lwa_bytes += 2; }, /LWA bytes/],
+  ];
+  for (const [mutate, re] of cases) { const x = makeIndex(); mutate(x); assert.throws(() => validateIndex(x), re); }
+});
+
+test('decodeEvent reads an LWA file with the LWA variables; EventStore merges both files; varMeta finds either', async () => {
+  const idx = makeIndex({ nrow: 3, ncol: 4 }), lw = decodeEvent(eventBuffer(idx, field, idx.lwa.vars), idx, idx.lwa.vars);
+  for (const v of idx.lwa.vars) for (const [k, i, j] of [[0, 0, 0], [30, 2, 3]]) {
+    assert.ok(Math.abs(frameSlice(lw[v.key], k, 3, 4)[i * 4 + j] - field(v.key, k, i, j)) <= v.scale / 2 + 1e-6, v.key);
+  }
+  assert.throws(() => decodeEvent(eventBuffer(idx), idx, idx.lwa.vars), /bytes/);
+  const calls = [];
+  const fetchFn = async (url) => { calls.push(url.split('?')[0]); return { ok: true, arrayBuffer: async () => (url.includes('.lwa.bin') ? eventBuffer(idx, field, idx.lwa.vars) : eventBuffer(idx)) }; };
+  const d = await new EventStore(idx, 'data/', fetchFn).get('E0001');
+  assert.deepEqual(calls, ['data/events/E0001.bin', 'data/events/E0001.lwa.bin']);
+  assert.deepEqual(Object.keys(d.vars).sort(), ['lwa_a', 'lwa_c', 'psl', 'spd250', 'v250', 'z500a']);
+  assert.equal(varMeta(idx, 'lwa_a').units, 'm s-1');
+  assert.equal(varMeta(idx, 'psl').offset, 1000);
+});
+
+test('a schema 2 index still validates and loads with no LWA file (the data switch)', async () => {
+  const x = makeIndex({ nrow: 3, ncol: 4 });
+  x.schema = 'blockform01-site/2'; delete x.lwa;
+  assert.ok(validateIndex(x));
+  const calls = [];
+  const d = await new EventStore(x, 'data/', async (url) => { calls.push(url); return { ok: true, arrayBuffer: async () => eventBuffer(x) }; }).get('E0001');
+  assert.equal(calls.length, 1);
+  assert.ok(d.vars.z500a && !d.vars.lwa_a);
 });

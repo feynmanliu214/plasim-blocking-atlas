@@ -9,6 +9,10 @@ export const VARS = [
   { key: 'spd250', label: '250 hPa wind speed', units: 'm s-1', scale: 0.01, offset: 0 },
   { key: 'psl', label: 'Sea-level pressure', units: 'hPa', scale: 0.01, offset: 1000 },
 ];
+export const LWA_VARS = [
+  { key: 'lwa_a', label: 'Anticyclonic local wave activity × cos(latitude), 250 hPa', units: 'm s-1', scale: 0.01, offset: 0 },
+  { key: 'lwa_c', label: 'Cyclonic local wave activity × cos(latitude), 250 hPa', units: 'm s-1', scale: 0.01, offset: 0 },
+];
 const LUT = Array.from({ length: 256 }, (_, k) => [k, 100, 255 - k]);
 
 export function frameTimes() {
@@ -19,6 +23,8 @@ export function field(key, k, i, j) {          // the physical value of `key` at
   if (key === 'z500a') return 300 * Math.sin(i / 4 + k / 10) * Math.cos(j / 9);
   if (key === 'v250') return 25 * Math.sin(j / 6 - k / 8);
   if (key === 'spd250') return 30 + 20 * Math.cos(i / 5) ** 2;
+  if (key === 'lwa_a') return 60 * Math.exp(-(((i - 16) ** 2) + (j - 44 - k / 10) ** 2) / 30);
+  if (key === 'lwa_c') return 45 * Math.exp(-(((i - 8) ** 2) + (j - 20) ** 2) / 20);
   return 1010 + 20 * Math.sin(i / 6) * Math.cos(j / 11 + k / 12);
 }
 
@@ -26,23 +32,27 @@ export function makeIndex({ nrow = 25, ncol = 89, events = [{ id: 'E0001', group
   const lat = Array.from({ length: nrow }, (_, i) => 20.93 + (i * (87.86 - 20.93)) / (nrow - 1));
   const t = frameTimes();
   const bytes = VARS.length * t.length * nrow * ncol * 2;
+  const lwaBytes = LWA_VARS.length * t.length * nrow * ncol * 2;
   const evs = events.map((e, k) => {
     const jc = Math.round(e.centre[1] / 2.8125);
     return { rp: 53821 / e.rank, M_y: 500, date: '0723-01-05', s_star: 35, peak: [65.5776, 306.5625],
       patch_box: [58.6, 71.2, 299.5, 313.6], col0: (((jc - 44) % 128) + 128) % 128, lon0: (jc - 44) * 2.8125, cells: 120,
       flags: { seed_fallback: false, multi_component: false, touches_south: false, polar_ring: false },
       file: `events/${e.id}.bin`, bytes, sha256: '', thumb: k, rp_display: '54,000',
-      series: t.map((x) => Math.round(3000 * Math.exp(-((x - 2) ** 2) / 8)) / 10), ...e };
+      series: t.map((x) => Math.round(3000 * Math.exp(-((x - 2) ** 2) / 8)) / 10),
+      lwa_file: `events/${e.id}.lwa.bin`, lwa_bytes: lwaBytes, lwa_sha256: '', ...e };
   });
   return {
-    schema: 'blockform01-site/2', build: { attempt: 'test', smoke: true }, pool: { n_seasons: 53820, n_pool: 5382, rp_min: 10 },
+    schema: 'blockform01-site/3', build: { attempt: 'test', smoke: true }, pool: { n_seasons: 53820, n_pool: 5382, rp_min: 10 },
     grid: { lat, nrow, ncol, nlon: 128, dlon: 2.8125, lat_min_display: 20, half_width_deg: 120 },
     frames: { t, daily_to: -5, step_hours: 6, window: [0, 5] }, vars: VARS,
+    lwa: { vars: LWA_VARS, level_hpa: 250, domain: 'global', source: 'test LWA' },
     style: { z500a: { cmap: 'RdBu_r', lim: [-400, 400], contours: [-300, -200, -100, 100, 200, 300] },
       v250: { cmap: 'PuOr_r', lim: [-40, 40] }, spd250: { contours: [30, 40, 50, 60] },
       psl: { cmap: 'viridis', lim: [980, 1040], contours: Array.from({ length: 16 }, (_, k) => 980 + 4 * k) },
-      series: { lim: [-400, 700] } },
-    cmaps: { RdBu_r: LUT, PuOr_r: LUT, viridis: LUT },
+      series: { lim: [-400, 700] },
+      lwa_a: { cmap: 'YlOrRd', lim: [0, 60], clipped: 0.004 }, lwa_c: { step: 15, above_lim: 0.001 } },
+    cmaps: { RdBu_r: LUT, PuOr_r: LUT, viridis: LUT, YlOrRd: LUT },
     lsm: Array.from({ length: nrow }, (_, i) => Array.from({ length: 128 }, (_, j) => (i > 10 && i < 16 && j > 100 && j < 110 ? '1' : '0')).join('')),
     coast: { source: 'test coastline', lat_min: 15, lines: [[-70, 50, -60, 58, -50, 62, -40, 60], [10, 70, 20, 72]] },
     thumbs: { z5: 'thumbs-z5.bin', region: 'thumbs-region.bin' },
@@ -52,11 +62,11 @@ export function makeIndex({ nrow = 25, ncol = 89, events = [{ id: 'E0001', group
   };
 }
 
-export function eventBuffer(idx, fn = field) {
+export function eventBuffer(idx, fn = field, vars = idx.vars) {
   const { nrow, ncol } = idx.grid, nf = idx.frames.t.length;
-  const buf = new ArrayBuffer(idx.vars.length * nf * nrow * ncol * 2), dv = new DataView(buf);
+  const buf = new ArrayBuffer(vars.length * nf * nrow * ncol * 2), dv = new DataView(buf);
   let p = 0;
-  for (const v of idx.vars) {
+  for (const v of vars) {
     for (let k = 0; k < nf; k++) for (let i = 0; i < nrow; i++) for (let j = 0; j < ncol; j++) {
       dv.setInt16(p, Math.round((fn(v.key, k, i, j) - v.offset) / v.scale), true);
       p += 2;
@@ -72,6 +82,8 @@ export function writeSite(dir, opts, mutate = null) {
   for (const e of idx.events) {
     files[e.file] = Buffer.from(eventBuffer(idx));
     e.sha256 = createHash('sha256').update(files[e.file]).digest('hex');
+    files[e.lwa_file] = Buffer.from(eventBuffer(idx, field, idx.lwa.vars));
+    e.lwa_sha256 = createHash('sha256').update(files[e.lwa_file]).digest('hex');
   }
   const tz = Buffer.alloc(2 * n * ne), tr = Buffer.alloc(n * ne);
   for (let q = 0; q < n * ne; q++) { tz.writeInt16LE(Math.round(100 * Math.sin(q / 50)), 2 * q); tr[q] = q % 7 === 0 ? 1 : 0; }

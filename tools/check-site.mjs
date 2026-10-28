@@ -27,6 +27,13 @@ try {
     try { size = statSync(p).size; } catch { errors.push(`${e.file}: missing`); continue; }
     if (size !== e.bytes) errors.push(`${e.file}: size ${size}, index says ${e.bytes}`);
     else if (sha(p) !== e.sha256) errors.push(`${e.file}: sha256`);
+    if (idx.lwa) {
+      const q = join(dir, e.lwa_file);
+      let ls = -1;
+      try { ls = statSync(q).size; } catch { errors.push(`${e.lwa_file}: missing`); continue; }
+      if (ls !== e.lwa_bytes) errors.push(`${e.lwa_file}: size ${ls}, index says ${e.lwa_bytes}`);
+      else if (sha(q) !== e.lwa_sha256) errors.push(`${e.lwa_file}: sha256`);
+    }
   }
   for (const [name, bytes] of [[idx.thumbs.z5, 2 * n * ne], [idx.thumbs.region, n * ne]]) {
     try { if (statSync(join(dir, name)).size !== bytes) errors.push(`${name}: size`); } catch { errors.push(`${name}: missing`); }

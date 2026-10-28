@@ -32,6 +32,10 @@ test('check-site passes a consistent site and fails a corrupted one', () => {
     assert.match(r.stdout, /E0001\.bin: sha256/);
     writeFileSync(join(dir, 'stray.txt'), 'x');
     assert.match(node(['tools/check-site.mjs', dir]).stdout, /stray file stray\.txt/);
+    const L = join(dir, 'events', 'E0001.lwa.bin'), lb = readFileSync(L);
+    lb[20] ^= 1;
+    writeFileSync(L, lb);
+    assert.match(node(['tools/check-site.mjs', dir]).stdout, /E0001\.lwa\.bin: sha256/);   // errors accumulate per file
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

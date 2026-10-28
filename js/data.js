@@ -1,7 +1,10 @@
-// Site data (plan R9, R13): index.json, each event's int16 bin (fetched when first opened, kept in a small LRU) and
-// the gallery thumbnails. Pure apart from `fetch`, which callers may replace (tests, tools).
-export const SCHEMA = 'blockform01-site/2';
+// Site data (plan R9, R13; BLOCKFORM02 R9, R10): index.json, each event's int16 bins -- the four fields and, from schema
+// 3, the 250 hPa local wave activity in a second file -- fetched when first opened and kept in a small LRU, and the
+// gallery thumbnails. Pure apart from `fetch`, which callers may replace (tests, tools).
+export const SCHEMA = 'blockform01-site/3';
+const ACCEPTED = ['blockform01-site/2', SCHEMA];          // the switch (BLOCKFORM02 R10); commit 3 removes /2
 const NEEDED = ['z500a', 'v250', 'spd250', 'psl'];
+const NEEDED_LWA = ['lwa_a', 'lwa_c'];
 
 // Schema 2's additions (plan R11): the coastline, the series scale, each event's series and RP text, known groups.
 function validateV2(idx) {
@@ -20,8 +23,25 @@ function validateV2(idx) {
   }
 }
 
+// Schema 3's additions (BLOCKFORM02 R9): the LWA variables, their shading scale and line step, each event's LWA file.
+function validateV3(idx) {
+  const l = idx.lwa, g = idx.grid, a = idx.style.lwa_a, c = idx.style.lwa_c;
+  if (!l || !Array.isArray(l.vars)) throw new Error('index.json lacks the LWA variables');
+  const keys = l.vars.map((v) => v.key);
+  for (const k of NEEDED_LWA) if (!keys.includes(k)) throw new Error(`index.json lacks LWA variable ${k}`);
+  if (!a || !Array.isArray(a.lim) || a.lim.length !== 2 || !(a.lim[1] > a.lim[0]) || !idx.cmaps[a.cmap]) {
+    throw new Error('index.json lacks the LWA colour scale');
+  }
+  if (!c || !(c.step > 0)) throw new Error('index.json lacks the cyclonic LWA line step');
+  const bytes = l.vars.length * idx.frames.t.length * g.nrow * g.ncol * 2;
+  for (const e of idx.events) {
+    if (typeof e.lwa_file !== 'string' || !e.lwa_file) throw new Error(`event ${e.id}: lwa_file`);
+    if (e.lwa_bytes !== bytes) throw new Error(`event ${e.id}: ${e.lwa_bytes} LWA bytes, expected ${bytes}`);
+  }
+}
+
 export function validateIndex(idx) {
-  if (!idx || idx.schema !== SCHEMA) throw new Error(`index.json schema ${idx && idx.schema} is not ${SCHEMA}`);
+  if (!idx || !ACCEPTED.includes(idx.schema)) throw new Error(`index.json schema ${idx && idx.schema} is not ${SCHEMA}`);
   const g = idx.grid, nf = idx.frames.t.length;
   if (g.lat.length !== g.nrow || idx.lsm.length !== g.nrow || idx.lsm.some((r) => r.length !== g.nlon)) {
     throw new Error('index.json grid or land-sea mask has the wrong shape');
@@ -32,6 +52,7 @@ export function validateIndex(idx) {
   const bytes = idx.vars.length * nf * g.nrow * g.ncol * 2;
   for (const e of idx.events) if (e.bytes !== bytes) throw new Error(`event ${e.id}: ${e.bytes} bytes, expected ${bytes}`);
   validateV2(idx);
+  if (idx.schema === SCHEMA) validateV3(idx);
   return idx;
 }
 
@@ -41,18 +62,22 @@ export async function loadIndex(base = 'data/', fetchFn = fetch) {
   return validateIndex(await r.json());
 }
 
-// (nvar, nframe, nrow, ncol) little-endian int16 -> {key: Float32Array(nframe * nrow * ncol)} in physical units.
-export function decodeEvent(buf, idx) {
+// (nvar, nframe, nrow, ncol) little-endian int16 -> {key: Float32Array(nframe * nrow * ncol)} in physical units, for
+// `vars` (the event file's idx.vars, or the LWA file's idx.lwa.vars).
+export function decodeEvent(buf, idx, vars = idx.vars) {
   const { nrow, ncol } = idx.grid, block = idx.frames.t.length * nrow * ncol;
-  if (buf.byteLength !== idx.vars.length * block * 2) throw new Error(`event data: ${buf.byteLength} bytes`);
+  if (buf.byteLength !== vars.length * block * 2) throw new Error(`event data: ${buf.byteLength} bytes`);
   const dv = new DataView(buf), out = {};
-  idx.vars.forEach((v, n) => {
+  vars.forEach((v, n) => {
     const a = new Float32Array(block), base = 2 * n * block;
     for (let i = 0; i < block; i++) a[i] = dv.getInt16(base + 2 * i, true) * v.scale + v.offset;
     out[v.key] = a;
   });
   return out;
 }
+
+// The metadata (label, units, scale, offset) of a variable in either file.
+export const varMeta = (idx, key) => [...idx.vars, ...((idx.lwa && idx.lwa.vars) || [])].find((v) => v.key === key);
 
 export function frameSlice(arr, k, nrow, ncol) {
   const n = nrow * ncol;
@@ -78,9 +103,16 @@ export class EventStore {
     if (!meta) throw new Error(`unknown event ${id}`);
     const p = (async () => {
       const fetchFn = this.fetchFn;   // bare call: browsers require fetch's receiver to be the global object
-      const r = await fetchFn(`${this.base}${meta.file}?v=${meta.sha256.slice(0, 12)}`);
-      if (!r.ok) throw new Error(`${meta.file}: HTTP ${r.status}`);
-      const data = { meta, vars: decodeEvent(await r.arrayBuffer(), this.idx) };
+      const bin = async (file, sha) => {
+        const r = await fetchFn(`${this.base}${file}?v=${sha.slice(0, 12)}`);
+        if (!r.ok) throw new Error(`${file}: HTTP ${r.status}`);
+        return r.arrayBuffer();
+      };
+      const lwa = this.idx.lwa;
+      const [main, lw] = await Promise.all([bin(meta.file, meta.sha256), lwa ? bin(meta.lwa_file, meta.lwa_sha256) : null]);
+      const vars = decodeEvent(main, this.idx);
+      if (lwa) Object.assign(vars, decodeEvent(lw, this.idx, lwa.vars));
+      const data = { meta, vars };
       this.cache.set(id, data);
       while (this.cache.size > this.capacity) this.cache.delete(this.cache.keys().next().value);
       return data;
