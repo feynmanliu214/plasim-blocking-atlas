@@ -8,6 +8,10 @@ import { fileURLToPath } from 'node:url';
 import { inflateSync } from 'node:zlib';
 import { projector } from '../js/proj.js';
 import { domainOf } from '../js/geo.js';
+import { PANELS, drawPanel } from '../js/draw.js';
+import { pixelMap } from '../js/render.js';
+import { decodeEvent, frameSlice, loadThumbs, validateIndex } from '../js/data.js';
+import { Raster } from '../tools/raster.mjs';
 import { writeSite } from './fixture.mjs';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
@@ -63,6 +67,33 @@ test('render-frame draws the page’s four maps with js/draw.js: north towards t
       const q = px(u, 540 + v);
       assert.ok(Math.abs(q[0] - q[1]) <= 2 && Math.abs(q[1] - q[2]) <= 2, `SLP pixel ${q}`);
     }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('every render-frame tile is drawPanel on a Raster flattened over the page background, pixel for pixel', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'atlas-'));
+  try {
+    writeSite(dir);
+    const out = join(dir, 'f.png'), r = node(['tools/render-frame.mjs', dir, 'E0001', '30', out]);
+    assert.equal(r.status, 0, r.stderr);
+    const px = pngPixels(readFileSync(out));
+    const idx = validateIndex(JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'))), ev = idx.events[0], g = idx.grid;
+    const buf = (p) => { const b = readFileSync(p); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); };
+    const v = decodeEvent(buf(join(dir, ev.file)), idx), s = (key) => frameSlice(v[key], 30, g.nrow, g.ncol);
+    const th = await loadThumbs(idx, `${dir}/`, async (p) => ({ ok: true, arrayBuffer: async () => buf(p) }));
+    const f = { z500a: s('z500a'), v250: s('v250'), spd250: s('spd250'), psl: s('psl'), z5: th.z5(ev.thumb), region: th.region(ev.thumb) };
+    const map = pixelMap(g, ev, 720, 540);
+    PANELS.forEach((p, m) => {
+      const R = new Raster(720, 540);
+      drawPanel(R, map, idx, ev, f, p.key, 1);
+      const want = R.flatten('#dedad2'), ox = (m % 2) * 720, oy = Math.floor(m / 2) * 540;
+      let bad = 0;
+      for (let y = 0; y < 540; y++) for (let x = 0; x < 720; x++) {
+        const got = px(ox + x, oy + y);
+        for (let c = 0; c < 4; c++) if (got[c] !== want[4 * (y * 720 + x) + c]) bad++;
+      }
+      assert.equal(bad, 0, `tile ${m} (${p.key})`);
+    });
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

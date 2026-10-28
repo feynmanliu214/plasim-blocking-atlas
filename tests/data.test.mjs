@@ -77,6 +77,7 @@ test('validateIndex (schema 2) requires the coastline, the series scale, each ev
   assert.ok(validateIndex(makeIndex()));
   const cases = [
     [(x) => { delete x.coast; }, /coast/], [(x) => { x.coast.lines.push([1, 2, 3]); }, /coast/],
+    [(x) => { x.coast.lines.push([1, 2, 3, 4, 5]); }, /coast/],
     [(x) => { delete x.style.series; }, /series scale/], [(x) => { x.events[0].series.pop(); }, /series/],
     [(x) => { x.events[0].series[3] = null; }, /series/], [(x) => { x.events[0].rp_display = ''; }, /rp_display/],
     [(x) => { x.events[0].group = 'rp7'; }, /unknown group/],

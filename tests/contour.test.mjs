@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { contourSegments, refine, chain } from '../js/contour.js';
+import { bilinear } from '../js/geo.js';
 
 test('segments of a plane lie on the level line; flat fields have none; non-finite cells are skipped', () => {
   const nr = 5, nc = 6, v = Float32Array.from({ length: nr * nc }, (_, q) => Math.floor(q / nc) + 2 * (q % nc));
@@ -24,6 +25,15 @@ test('refine is the bilinear interpolant on an f-times finer grid', () => {
   const R = refine(v, nr, nc, 4);
   assert.deepEqual([R.nrow, R.ncol, R.f], [17, 21, 4]);
   for (let I = 0; I < R.nrow; I++) for (let J = 0; J < R.ncol; J++) assert.ok(Math.abs(R.vals[I * R.ncol + J] - (I / 4 + J / 2)) < 1e-5);
+});
+
+test('refine is the bilinear interpolant of a curved field too (interpolating from a wrong cell is exact only on a plane)', () => {
+  const nr = 5, nc = 6;
+  const v = Float32Array.from({ length: nr * nc }, (_, q) => { const i = Math.floor(q / nc), j = q % nc; return i + 2 * j + 0.1 * i * i + 0.3 * j * j; });
+  const R = refine(v, nr, nc, 4);
+  for (let I = 0; I < R.nrow; I++) for (let J = 0; J < R.ncol; J++) {
+    assert.ok(Math.abs(R.vals[I * R.ncol + J] - bilinear(v, nr, nc, I / 4, J / 4)) < 1e-4, `${I} ${J}`);
+  }
 });
 
 test('chain joins segments into one polyline per curve and closes a ring', () => {

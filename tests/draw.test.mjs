@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { levelsFor, regionField, padRows, drawPanel, PANELS, STYLE } from '../js/draw.js';
 import { pixelMap } from '../js/render.js';
 import { projector } from '../js/proj.js';
-import { domainOf } from '../js/geo.js';
+import { bilinear, colIndex, domainOf, rowCoord } from '../js/geo.js';
 import { decodeEvent, frameSlice } from '../js/data.js';
 import { Raster } from '../tools/raster.mjs';
 import { makeIndex, eventBuffer } from './fixture.mjs';
@@ -13,6 +13,15 @@ function fields(idx, k = 30) {
   const z5 = Float32Array.from({ length: n }, (_, q) => 300 * Math.exp(-(((Math.floor(q / g.ncol) - 16) ** 2) + ((q % g.ncol) - 44) ** 2) / 40));
   return { z500a: s('z500a'), v250: s('v250'), spd250: s('spd250'), psl: s('psl'), z5, region: Uint8Array.from(z5, (x) => (x >= 250 ? 1 : 0)) };
 }
+
+// A Raster that records each stroke's colour, width and paths.
+function recorder(W, H) {
+  const R = new Raster(W, H), strokes = [], stroke = R.stroke.bind(R);
+  R.stroke = () => { strokes.push({ color: R.strokeStyle, width: R.lineWidth, paths: R.paths.map((p) => [...p]) }); stroke(); };
+  return { R, strokes };
+}
+const vertices = (strokes, st) => strokes.filter((x) => x.color === st.color && x.width === st.width)
+  .flatMap((x) => x.paths.flatMap((p) => Array.from({ length: p.length >> 1 }, (_, q) => [p[2 * q], p[2 * q + 1]])));
 
 test('levelsFor spans the field every step and can skip zero', () => {
   assert.deepEqual(levelsFor(Float32Array.from([-250, 30, 410, NaN]), 100, { skipZero: true }), [-200, -100, 100, 200, 300, 400]);
@@ -62,4 +71,34 @@ test('draw order: shading, coastline, field contours, graticule, patch box', () 
   const at = (c) => seen.indexOf(c);
   assert.ok(at(STYLE.coast.color) >= 0 && at(STYLE.coast.color) < at(STYLE.z.color) && at(STYLE.z.color) < at(STYLE.grid.color)
     && at(STYLE.grid.color) < at(STYLE.box.color), seen.join(' | '));
+});
+
+test('every drawn Z500 anomaly contour vertex lies on the shading’s interpolant at a non-zero multiple of 100 m', () => {
+  const idx = makeIndex(), ev = idx.events[0], g = idx.grid, map = pixelMap(g, ev, 320, 240), f = fields(idx);
+  const { R, strokes } = recorder(320, 240);
+  drawPanel(R, map, idx, ev, f, 'z500a', 1);
+  let n = 0, worst = 0;
+  for (const [x, y] of vertices(strokes, STYLE.z)) {
+    const [lat, lon] = map.P.ll(x, y);
+    if (lat > 89.99) continue;                                    // the pole: every padded-row end meets there, longitude undefined
+    const val = bilinear(f.z500a, g.nrow, g.ncol, rowCoord(lat, g.lat), colIndex(lon, ev.lon0, g.dlon, g.ncol));
+    const lv = Math.round(val / 100) * 100;
+    assert.notEqual(lv, 0);
+    worst = Math.max(worst, Math.abs(val - lv)); n++;
+  }
+  assert.ok(n > 200, `${n} vertices`);
+  assert.ok(worst < 0.5, `worst ${worst} m`);
+});
+
+test('the ½·M outline encloses only the region, not another blob above ½·M', () => {
+  const idx = makeIndex(), ev = idx.events[0], g = idx.grid, map = pixelMap(g, ev, 320, 240), n = g.nrow * g.ncol;
+  const blob = (q, jc) => 400 * Math.exp(-(((Math.floor(q / g.ncol) - 16) ** 2) + ((q % g.ncol) - jc) ** 2) / 20);
+  const z5 = Float32Array.from({ length: n }, (_, q) => blob(q, 30) + blob(q, 60));               // two blobs above ½·M = 250 m
+  const region = Uint8Array.from(z5, (x, q) => (x >= 0.5 * ev.M_y && q % g.ncol < 45 ? 1 : 0));   // the left one is the region
+  const zero = new Float32Array(n), f = { z500a: zero, v250: zero, spd250: zero, psl: zero, z5, region };
+  const { R, strokes } = recorder(320, 240);
+  drawPanel(R, map, idx, ev, f, 'z5', 1);
+  const cols = vertices(strokes, STYLE.region).map(([x, y]) => colIndex(map.P.ll(x, y)[1], ev.lon0, g.dlon, g.ncol));
+  assert.ok(cols.length > 20, `${cols.length} vertices`);
+  assert.ok(cols.every((j) => j > 20 && j < 40), `outline columns ${Math.min(...cols)}..${Math.max(...cols)}`);
 });
