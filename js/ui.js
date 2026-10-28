@@ -15,6 +15,9 @@ export function el(tag, attrs = {}, ...children) {
 }
 
 export const fmt = (x, d = 1) => (Number.isFinite(x) ? Number(x).toFixed(d) : '—');
-export const fmtRP = (rp) => (rp >= 100 ? Math.round(rp).toLocaleString('en-US') : rp.toFixed(1));
+export const num = (x) => Number(x).toLocaleString('en-US');
+export const rankText = (idx, e) => `rank ${num(e.rank)} of ${num(idx.pool.n_seasons)}`;       // owner V3
+export const rpText = (e) => `RP ≈ ${e.rp_display}`;
+export const sentence = (s) => (s ? `${s[0].toUpperCase()}${s.slice(1)}${/[.!?]$/.test(s) ? '' : '.'}` : '');
 export const groupLabel = (idx, key) => (idx.groups.find((g) => g.key === key) || { label: key }).label;
 export const tLabel = (t) => `t = ${t >= 0 ? '+' : '−'}${Math.abs(t).toFixed(2)} d`;
