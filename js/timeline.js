@@ -32,8 +32,8 @@ export function timeline(player, { dateOf = null, frames = null } = {}) {
   next.addEventListener('click', () => { player.pause(); player.step(1); });
   play.addEventListener('click', () => player.toggle());
   range.addEventListener('input', () => {
-    player.pause();
-    player.set(player.nearest(t0 + ((t1 - t0) * Number(range.value)) / SCALE));
+    const x = t0 + ((t1 - t0) * Number(range.value)) / SCALE;   // read before pause: pause's emit rewrites range.value
+    player.pause(); player.set(player.nearest(x));
     update(player.index);                                   // snap the thumb to the frame even when the index is unchanged
   });
   speed.addEventListener('change', () => player.setRate(speed.value));
