@@ -2,7 +2,6 @@
 // 3, the 250 hPa local wave activity in a second file -- fetched when first opened and kept in a small LRU, and the
 // gallery thumbnails. Pure apart from `fetch`, which callers may replace (tests, tools).
 export const SCHEMA = 'blockform01-site/3';
-const ACCEPTED = ['blockform01-site/2', SCHEMA];          // the switch (BLOCKFORM02 R10); commit 3 removes /2
 const NEEDED = ['z500a', 'v250', 'spd250', 'psl'];
 const NEEDED_LWA = ['lwa_a', 'lwa_c'];
 
@@ -41,7 +40,7 @@ function validateV3(idx) {
 }
 
 export function validateIndex(idx) {
-  if (!idx || !ACCEPTED.includes(idx.schema)) throw new Error(`index.json schema ${idx && idx.schema} is not ${SCHEMA}`);
+  if (!idx || idx.schema !== SCHEMA) throw new Error(`index.json schema ${idx && idx.schema} is not ${SCHEMA}`);
   const g = idx.grid, nf = idx.frames.t.length;
   if (g.lat.length !== g.nrow || idx.lsm.length !== g.nrow || idx.lsm.some((r) => r.length !== g.nlon)) {
     throw new Error('index.json grid or land-sea mask has the wrong shape');
@@ -52,7 +51,7 @@ export function validateIndex(idx) {
   const bytes = idx.vars.length * nf * g.nrow * g.ncol * 2;
   for (const e of idx.events) if (e.bytes !== bytes) throw new Error(`event ${e.id}: ${e.bytes} bytes, expected ${bytes}`);
   validateV2(idx);
-  if (idx.schema === SCHEMA) validateV3(idx);
+  validateV3(idx);
   return idx;
 }
 

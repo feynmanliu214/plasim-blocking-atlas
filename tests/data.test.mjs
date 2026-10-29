@@ -117,12 +117,7 @@ test('decodeEvent reads an LWA file with the LWA variables; EventStore merges bo
   assert.equal(varMeta(idx, 'psl').offset, 1000);
 });
 
-test('a schema 2 index still validates and loads with no LWA file (the data switch)', async () => {
-  const x = makeIndex({ nrow: 3, ncol: 4 });
-  x.schema = 'blockform01-site/2'; delete x.lwa;
-  assert.ok(validateIndex(x));
-  const calls = [];
-  const d = await new EventStore(x, 'data/', async (url) => { calls.push(url); return { ok: true, arrayBuffer: async () => eventBuffer(x) }; }).get('E0001');
-  assert.equal(calls.length, 1);
-  assert.ok(d.vars.z500a && !d.vars.lwa_a);
+test('validateIndex refuses schema 2', () => {
+  const x = makeIndex(); x.schema = 'blockform01-site/2';
+  assert.throws(() => validateIndex(x), /schema/);
 });
