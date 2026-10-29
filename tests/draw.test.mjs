@@ -4,7 +4,7 @@ import { levelsFor, regionField, padRows, drawPanel, frameFields, PANELS, STYLE 
 import { pixelMap } from '../js/render.js';
 import { projector } from '../js/proj.js';
 import { bilinear, colIndex, domainOf, rowCoord } from '../js/geo.js';
-import { decodeEvent } from '../js/data.js';
+import { decodeEvent, frameSlice } from '../js/data.js';
 import { Raster } from '../tools/raster.mjs';
 import { makeIndex, eventBuffer } from './fixture.mjs';
 
@@ -107,6 +107,9 @@ test('the ½·M outline encloses only the region, not another blob above ½·M',
 test('the LWA map shades anticyclonic LWA through its colormap and draws the cyclonic lines on that field’s levels', () => {
   const idx = makeIndex(), ev = idx.events[0], g = idx.grid, map = pixelMap(g, ev, 320, 240), f = fields(idx);
   assert.deepEqual(Object.keys(f).sort(), ['lwa', 'lwa_c', 'psl', 'region', 'spd250', 'v250', 'z5', 'z500a']);
+  const lw = decodeEvent(eventBuffer(idx, undefined, idx.lwa.vars), idx, idx.lwa.vars);
+  assert.deepEqual(f.lwa, frameSlice(lw.lwa_a, 30, g.nrow, g.ncol));                     // shaded: anticyclonic
+  assert.deepEqual(f.lwa_c, frameSlice(lw.lwa_c, 30, g.nrow, g.ncol));                   // lines: cyclonic
   const { R, strokes } = recorder(320, 240);
   drawPanel(R, map, idx, ev, f, 'lwa', 1);
   let n = 0, worst = 0;
@@ -120,6 +123,6 @@ test('the LWA map shades anticyclonic LWA through its colormap and draws the cyc
   }
   assert.ok(n > 50, `${n} vertices`);
   assert.ok(worst < 0.2, `worst ${worst}`);
-  const S = new Raster(320, 240); drawPanel(S, map, idx, ev, { ...f, lwa: f.lwa_c, lwa_c: f.lwa }, 'lwa', 1);
+  const S = new Raster(320, 240); drawPanel(S, map, idx, ev, { ...f, lwa: f.lwa_c }, 'lwa', 1);
   assert.ok(R.data.some((v, i) => v !== S.data[i]), 'shading follows f.lwa, not f.lwa_c');
 });

@@ -108,10 +108,12 @@ test('decodeEvent reads an LWA file with the LWA variables; EventStore merges bo
     assert.ok(Math.abs(frameSlice(lw[v.key], k, 3, 4)[i * 4 + j] - field(v.key, k, i, j)) <= v.scale / 2 + 1e-6, v.key);
   }
   assert.throws(() => decodeEvent(eventBuffer(idx), idx, idx.lwa.vars), /bytes/);
-  const calls = [];
-  const fetchFn = async (url) => { calls.push(url.split('?')[0]); return { ok: true, arrayBuffer: async () => (url.includes('.lwa.bin') ? eventBuffer(idx, field, idx.lwa.vars) : eventBuffer(idx)) }; };
+  idx.events[0].sha256 = 'a'.repeat(64); idx.events[0].lwa_sha256 = 'b'.repeat(64);   // distinct cache-busters
+  const calls = [], lfn = (key) => (key === 'lwa_a' ? 11 : 22);                            // distinct components
+  const fetchFn = async (url) => { calls.push(url); return { ok: true, arrayBuffer: async () => (url.includes('.lwa.bin') ? eventBuffer(idx, lfn, idx.lwa.vars) : eventBuffer(idx)) }; };
   const d = await new EventStore(idx, 'data/', fetchFn).get('E0001');
-  assert.deepEqual(calls, ['data/events/E0001.bin', 'data/events/E0001.lwa.bin']);
+  assert.deepEqual(calls, ['data/events/E0001.bin?v=aaaaaaaaaaaa', 'data/events/E0001.lwa.bin?v=bbbbbbbbbbbb']);
+  assert.ok(d.vars.lwa_a.every((x) => Math.abs(x - 11) < 1e-4) && d.vars.lwa_c.every((x) => Math.abs(x - 22) < 1e-4), 'anticyclonic first');
   assert.deepEqual(Object.keys(d.vars).sort(), ['lwa_a', 'lwa_c', 'psl', 'spd250', 'v250', 'z500a']);
   assert.equal(varMeta(idx, 'lwa_a').units, 'm s-1');
   assert.equal(varMeta(idx, 'psl').offset, 1000);

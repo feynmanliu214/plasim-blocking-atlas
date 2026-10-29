@@ -34,3 +34,9 @@ test('About describes the LWA map in the approved wording (W3)', async () => {
     + 'Blue lines every 15 m s⁻¹: the cyclonic part — high-vorticity air displaced equatorward, as in troughs and '
     + 'cut-off lows. Full values; no climatology is subtracted.');
 });
+
+test('the LWA map caption is the approved wording (W1)', async () => {
+  const { PANELS } = await import('../js/draw.js');
+  assert.equal(PANELS.find((p) => p.key === 'lwa').title({ lwa_c: { step: 15 } }),
+    '250 hPa local wave activity × cos φ (m s⁻¹): anticyclonic shaded, cyclonic lines every 15 m s⁻¹');
+});
