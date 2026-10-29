@@ -2,6 +2,14 @@
 // how notes are stored — all from index.json, in the wording the owner approved with the plan (V3, V4).
 import { el, num, sentence } from './ui.js';
 
+// The LWA map's entry in the Maps list (W3; BLOCKFORM02).
+export const lwaAboutText = (st) => '250 hPa local wave activity (Huang & Nakamura 2016) of absolute vorticity, computed '
+  + 'with falwa’s barotropic method on the whole globe at each frame and shown as falwa returns it, multiplied by '
+  + `cos(latitude). Shaded ${st.lwa_a.lim[0]} … ${st.lwa_a.lim[1]} m s⁻¹: the anticyclonic part — low-vorticity air `
+  + 'displaced poleward of its equivalent latitude, as in ridges and blocks. Blue lines every '
+  + `${st.lwa_c.step} m s⁻¹: the cyclonic part — high-vorticity air displaced equatorward, as in troughs and cut-off `
+  + 'lows. Full values; no climatology is subtracted.';
+
 export function renderAbout(root, app) {
   const { idx } = app, st = idx.style, f = idx.frames, N = idx.pool.n_seasons, top = idx.events.find((e) => e.rank === 1);
   const sg = (x) => `${x < 0 ? '−' : x > 0 ? '+' : ''}${Math.abs(x)}`;             // U+2212 minus, as the wording table
@@ -32,6 +40,7 @@ export function renderAbout(root, app) {
       el('li', {}, `250 hPa meridional wind, shaded ${st.v250.lim[0]} … ${st.v250.lim[1]} m s⁻¹, with thin 250 hPa wind-speed `
         + `lines at ${st.spd250.contours.join(', ')} m s⁻¹.`),
       el('li', {}, `Sea-level pressure as isobars every ${pStep} hPa (1000 hPa bold), without shading.`),
+      el('li', {}, lwaAboutText(st)),
       el('li', {}, 'Five-day mean s* … s*+4 of the Z500 anomaly. The bold line is the edge of the region where it is at least '
         + 'half the event’s peak-patch value M, around the peak patch, traced on the interpolated field.'),
       el('li', {}, 'Under the timeline: the peak-patch Z500 anomaly at each frame — the cos(latitude)-weighted mean over the '

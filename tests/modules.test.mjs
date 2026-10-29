@@ -24,3 +24,13 @@ test('the wording helpers print rank and RP as the plan’s Public wording table
   const ui = await import('../js/ui.js');
   assert.equal(ui.fmtRP, undefined);
 });
+
+test('About describes the LWA map in the approved wording (W3)', async () => {
+  const { lwaAboutText } = await import('../js/about.js');
+  assert.equal(lwaAboutText({ lwa_a: { lim: [0, 60] }, lwa_c: { step: 15 } }),
+    '250 hPa local wave activity (Huang & Nakamura 2016) of absolute vorticity, computed with falwa’s barotropic method '
+    + 'on the whole globe at each frame and shown as falwa returns it, multiplied by cos(latitude). Shaded 0 … 60 m s⁻¹: '
+    + 'the anticyclonic part — low-vorticity air displaced poleward of its equivalent latitude, as in ridges and blocks. '
+    + 'Blue lines every 15 m s⁻¹: the cyclonic part — high-vorticity air displaced equatorward, as in troughs and '
+    + 'cut-off lows. Full values; no climatology is subtracted.');
+});
