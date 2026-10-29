@@ -38,30 +38,31 @@ globalThis.devicePixelRatio = 2;
 Raster.prototype.arc = function () {}; Raster.prototype.fill = function () {};          // the strip's dots; Raster draws no fills
 
 const { PanelSet, drawThumb, colorbarFor } = await import('../js/panels.js');
-const { PANELS, drawPanel } = await import('../js/draw.js');
+const { PANELS, drawPanel, frameFields } = await import('../js/draw.js');
 const { pixelMap } = await import('../js/render.js');
-const { decodeEvent, frameSlice } = await import('../js/data.js');
+const { decodeEvent } = await import('../js/data.js');
+const { bilinear, colIndex, rowCoord } = await import('../js/geo.js');
 const { seriesChart, seriesGeometry, LINE_COLORS } = await import('../js/series.js');
 const { Player } = await import('../js/player.js');
 
 const idx = makeIndex(), ev = idx.events[0], g = idx.grid, n = g.nrow * g.ncol;
-const data = { meta: ev, vars: decodeEvent(eventBuffer(idx), idx) };
+const data = { meta: ev, vars: { ...decodeEvent(eventBuffer(idx), idx), ...decodeEvent(eventBuffer(idx, undefined, idx.lwa.vars), idx, idx.lwa.vars) } };
 const ref = { z5: Float32Array.from({ length: n }, (_, q) => 300 * Math.exp(-(((Math.floor(q / g.ncol) - 16) ** 2) + ((q % g.ncol) - 44) ** 2) / 40)) };
 ref.region = Uint8Array.from(ref.z5, (x) => (x >= 250 ? 1 : 0));
 
 test('PanelSet sizes its maps at the device pixel ratio, draws each with drawPanel at s = DPR, the five-day map once, and recentres', () => {
   CSS_W = 300; globalThis.devicePixelRatio = 2;
   const ps = new PanelSet(null, idx, data, ref);
-  assert.deepEqual(ps.figs.map((f) => [f.canvas.width, f.canvas.height]), Array(4).fill([600, 450]));
+  assert.deepEqual(ps.figs.map((f) => [f.canvas.width, f.canvas.height]), Array(5).fill([600, 450]));
   ps.draw(30); ps.draw(31);
-  assert.deepEqual(PANELS.map((p) => p.key), ['z500a', 'v250', 'psl', 'z5']);
-  assert.deepEqual(ps.figs.map((f) => f.canvas.puts), [2, 2, 2, 1]);
-  const s = (key) => frameSlice(data.vars[key], 31, g.nrow, g.ncol), want = new Raster(600, 450);
-  drawPanel(want, pixelMap(g, ev, 600, 450), idx, ev, { z500a: s('z500a'), v250: s('v250'), spd250: s('spd250'), psl: s('psl'), ...ref }, 'z500a', 2);
+  assert.deepEqual(PANELS.map((p) => p.key), ['z500a', 'v250', 'psl', 'lwa', 'z5']);
+  assert.deepEqual(ps.figs.map((f) => f.canvas.puts), [2, 2, 2, 2, 1]);
+  const want = new Raster(600, 450);
+  drawPanel(want, pixelMap(g, ev, 600, 450), idx, ev, frameFields(idx, data.vars, 31, ref), 'z500a', 2);
   assert.ok(ps.figs[0].canvas.getContext().data.every((v, i) => v === want.data[i]), 'the Z500 anomaly map is drawPanel at s = 2');
   ps.setCentre(ev.centre[1] + 30);
   assert.equal(ps.map.dom.lonC, ev.centre[1] + 30);
-  assert.equal(ps.figs[3].canvas.puts, 2, 'the five-day map is redrawn on the new centre');
+  assert.equal(ps.figs[4].canvas.puts, 2, 'the five-day map is redrawn on the new centre');
   ps.setCentre(null);
   assert.equal(ps.map.dom.lonC, ev.centre[1]);
 });
@@ -98,4 +99,22 @@ test('the series strip draws each point at its model time, not its frame index',
   assert.equal(xs.length, t.length);
   xs.forEach((x, k) => assert.ok(Math.abs(x - G.x(t[k])) < 1e-9, `frame ${k}: ${x} vs ${G.x(t[k])}`));
   strip.destroy();
+});
+
+test('the LWA map’s colour bar is its YlOrRd scale and its readout gives both components at the cursor', () => {
+  CSS_W = 300; globalThis.devicePixelRatio = 1;
+  const ps = new PanelSet(null, idx, data, ref), m = PANELS.findIndex((p) => p.key === 'lwa');
+  const bar = colorbarFor(idx, PANELS[m]);
+  bar.paint();
+  assert.equal(PANELS[m].shade, 'lwa_a');
+  ps.draw(30);
+  const r = { textContent: '' }, [lat, lon] = [62.0, ev.centre[1]];
+  ps.at = { readout: r, lat, lon, n: m };
+  ps.showReadout();
+  const f = frameFields(idx, data.vars, 30, ref), i = rowCoord(lat, g.lat), j = colIndex(lon, ev.lon0, g.dlon, g.ncol);
+  const a = bilinear(f.lwa, g.nrow, g.ncol, i, j).toFixed(1), c = bilinear(f.lwa_c, g.nrow, g.ncol, i, j).toFixed(1);
+  assert.match(r.textContent, new RegExp(`· LWA anticyclonic ${a} · cyclonic ${c} m s⁻¹$`));
+  ps.at = { readout: r, lat, lon, n: 0 };
+  ps.showReadout();
+  assert.match(r.textContent, /Z500′ .* SLP .* hPa$/);
 });

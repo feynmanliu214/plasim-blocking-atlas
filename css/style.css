@@ -45,6 +45,7 @@ canvas.thumb, canvas.panel { width: 100%; height: auto; display: block; border-r
 .gsec { margin: 14px 0 22px; }
 .gsec > h3 { display: flex; gap: 8px; align-items: baseline; font-size: 15px; }
 .panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; align-items: start; }
+@media (min-width: 1200px) { .panels { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .panels canvas.panel { max-width: var(--map-max-w, calc((100vh - 290px) / 2 * 4 / 3)); margin: 0 auto; }
 @media (max-width: 900px) { .panels { grid-template-columns: minmax(0, 1fr); } .panels canvas.panel { max-width: 100%; } }
 .fig { margin: 0; }

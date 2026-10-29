@@ -1,17 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { levelsFor, regionField, padRows, drawPanel, PANELS, STYLE } from '../js/draw.js';
+import { levelsFor, regionField, padRows, drawPanel, frameFields, PANELS, STYLE } from '../js/draw.js';
 import { pixelMap } from '../js/render.js';
 import { projector } from '../js/proj.js';
 import { bilinear, colIndex, domainOf, rowCoord } from '../js/geo.js';
-import { decodeEvent, frameSlice } from '../js/data.js';
+import { decodeEvent } from '../js/data.js';
 import { Raster } from '../tools/raster.mjs';
 import { makeIndex, eventBuffer } from './fixture.mjs';
 
 function fields(idx, k = 30) {
-  const g = idx.grid, v = decodeEvent(eventBuffer(idx), idx), n = g.nrow * g.ncol, s = (key) => frameSlice(v[key], k, g.nrow, g.ncol);
+  const g = idx.grid, n = g.nrow * g.ncol;
+  const v = { ...decodeEvent(eventBuffer(idx), idx), ...decodeEvent(eventBuffer(idx, undefined, idx.lwa.vars), idx, idx.lwa.vars) };
   const z5 = Float32Array.from({ length: n }, (_, q) => 300 * Math.exp(-(((Math.floor(q / g.ncol) - 16) ** 2) + ((q % g.ncol) - 44) ** 2) / 40));
-  return { z500a: s('z500a'), v250: s('v250'), spd250: s('spd250'), psl: s('psl'), z5, region: Uint8Array.from(z5, (x) => (x >= 250 ? 1 : 0)) };
+  return frameFields(idx, v, k, { z5, region: Uint8Array.from(z5, (x) => (x >= 250 ? 1 : 0)) });
 }
 
 // A Raster that records each stroke's colour, width and paths.
@@ -45,7 +46,7 @@ test('regionField leaves only the region at or above the threshold', () => {
 
 test('the isobar panel is paper and grey lines only; the shaded panels use the colormap; × sits at the projected centre', () => {
   const idx = makeIndex(), ev = idx.events[0], W = 160, H = 120, map = pixelMap(idx.grid, ev, W, H), f = fields(idx);
-  assert.deepEqual(PANELS.map((p) => p.key), ['z500a', 'v250', 'psl', 'z5']);
+  assert.deepEqual(PANELS.map((p) => p.key), ['z500a', 'v250', 'psl', 'lwa', 'z5']);
   const S = new Raster(W, H); drawPanel(S, map, idx, ev, f, 'psl', 1);
   let opaque = 0;
   for (let p = 0; p < W * H; p++) {
@@ -101,4 +102,24 @@ test('the ½·M outline encloses only the region, not another blob above ½·M',
   const cols = vertices(strokes, STYLE.region).map(([x, y]) => colIndex(map.P.ll(x, y)[1], ev.lon0, g.dlon, g.ncol));
   assert.ok(cols.length > 20, `${cols.length} vertices`);
   assert.ok(cols.every((j) => j > 20 && j < 40), `outline columns ${Math.min(...cols)}..${Math.max(...cols)}`);
+});
+
+test('the LWA map shades anticyclonic LWA through its colormap and draws the cyclonic lines on that field’s levels', () => {
+  const idx = makeIndex(), ev = idx.events[0], g = idx.grid, map = pixelMap(g, ev, 320, 240), f = fields(idx);
+  assert.deepEqual(Object.keys(f).sort(), ['lwa', 'lwa_c', 'psl', 'region', 'spd250', 'v250', 'z5', 'z500a']);
+  const { R, strokes } = recorder(320, 240);
+  drawPanel(R, map, idx, ev, f, 'lwa', 1);
+  let n = 0, worst = 0;
+  for (const [x, y] of vertices(strokes, STYLE.lwa)) {
+    const [lat, lon] = map.P.ll(x, y);
+    if (lat > 89.99) continue;
+    const val = bilinear(f.lwa_c, g.nrow, g.ncol, rowCoord(lat, g.lat), colIndex(lon, ev.lon0, g.dlon, g.ncol));
+    const lv = Math.round(val / idx.style.lwa_c.step) * idx.style.lwa_c.step;
+    assert.ok(lv > 0, `level ${lv}`);
+    worst = Math.max(worst, Math.abs(val - lv)); n++;
+  }
+  assert.ok(n > 50, `${n} vertices`);
+  assert.ok(worst < 0.2, `worst ${worst}`);
+  const S = new Raster(320, 240); drawPanel(S, map, idx, ev, { ...f, lwa: f.lwa_c, lwa_c: f.lwa }, 'lwa', 1);
+  assert.ok(R.data.some((v, i) => v !== S.data[i]), 'shading follows f.lwa, not f.lwa_c');
 });

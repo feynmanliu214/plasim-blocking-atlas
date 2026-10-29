@@ -38,10 +38,10 @@ const find = (n, pred, out = []) => { if (n instanceof FakeEl) { if (pred(n)) ou
 test('Compare labels every map with its own event id, in column order within each row', async () => {
   const ids = ['E0429', 'E0007', 'E0152'];
   const idx = makeIndex({ events: ids.map((id, k) => ({ id, group: 'rp1000', rank: k + 1, centre: [64.2, 300 + 10 * k] })) });
-  const n = idx.grid.nrow * idx.grid.ncol, buf = eventBuffer(idx);
+  const n = idx.grid.nrow * idx.grid.ncol, buf = eventBuffer(idx), lbuf = eventBuffer(idx, undefined, idx.lwa.vars);
   const app = {
     idx, tray: [], byId: new Map(idx.events.map((e) => [e.id, e])), toggleTray() {},
-    events: { get: async (id) => ({ meta: idx.events.find((e) => e.id === id), vars: decodeEvent(buf, idx) }) },
+    events: { get: async (id) => ({ meta: idx.events.find((e) => e.id === id), vars: { ...decodeEvent(buf, idx), ...decodeEvent(lbuf, idx, idx.lwa.vars) } }) },
     thumbs: { z5: () => new Float32Array(n), region: () => new Uint8Array(n) },
   };
   const root = new FakeEl('main');

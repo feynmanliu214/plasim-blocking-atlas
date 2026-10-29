@@ -12,7 +12,7 @@ test('every view module links (its imports resolve) and exports its entry points
     for (const n of names) assert.equal(typeof m[n], 'function', `${file}: ${n}`);
   }
   const { PANELS } = await import('../js/draw.js');
-  assert.deepEqual(PANELS.map((p) => p.key), ['z500a', 'v250', 'psl', 'z5']);
+  assert.deepEqual(PANELS.map((p) => p.key), ['z500a', 'v250', 'psl', 'lwa', 'z5']);
 });
 
 test('the wording helpers print rank and RP as the plan’s Public wording table', async () => {

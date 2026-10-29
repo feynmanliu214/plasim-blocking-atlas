@@ -5,6 +5,7 @@
 import { chain, contourSegments, refine } from './contour.js';
 import { fillPixels, projectPolyline, shadePixels, strokePaths } from './render.js';
 import { lonLabel, rowLat } from './geo.js';
+import { frameSlice } from './data.js';
 
 export const REFINE = 4;
 export const PAPER = [255, 255, 255];
@@ -19,19 +20,31 @@ export const STYLE = {
   isobar1000: { color: '#111', width: 1.5 },
   region: { color: '#000', width: 1.8 },
   box: { color: '#000', width: 1.0, dash: [5, 3] },
+  lwa: { color: '#1f4e96', width: 1.1 },
 };
 
 const step = (levels) => levels[1] - levels[0];
 const scaled = (dash, s) => (dash ? dash.map((d) => d * s) : null);
 
-// The four maps in the page's 2 × 2 order (owner O5, V2; plan R7). `shade` names the colour scale; null is paper.
+// The five maps in the page's order (owner O5, V2; plan R7; BLOCKFORM02 R11): three columns on wide screens, so the
+// LWA map sits under the Z500 anomaly. `shade` names the colour scale; null is paper.
 export const PANELS = [
   { key: 'z500a', shade: 'z500a', title: (st) => `Z500 anomaly (m); contours every ${step(st.z500a.contours)} m, negative dashed` },
   { key: 'v250', shade: 'v250', title: (st) => `250 hPa meridional wind (m s⁻¹); thin lines: wind speed ${st.spd250.contours.join(', ')} m s⁻¹` },
   { key: 'psl', shade: null, title: (st) => `Sea-level pressure: isobars every ${step(st.psl.contours)} hPa, 1000 hPa bold` },
+  { key: 'lwa', shade: 'lwa_a',
+    title: (st) => `250 hPa local wave activity × cos φ (m s⁻¹): anticyclonic shaded, cyclonic lines every ${st.lwa_c.step} m s⁻¹` },
   { key: 'z5', shade: 'z500a', static: true,
     title: () => 'Five-day mean s* … s*+4: Z500 anomaly; z̄ ≥ ½·M region (bold), peak patch (dashed), centre (×)' },
 ];
+
+// The arrays drawPanel reads at frame k (BLOCKFORM02 R10): the event's decoded fields, the LWA map's shading (`lwa`,
+// anticyclonic) and lines (`lwa_c`, cyclonic), and the five-day mean `ref` = { z5, region }.
+export function frameFields(idx, vars, k, ref) {
+  const g = idx.grid, s = (key) => frameSlice(vars[key], k, g.nrow, g.ncol);
+  return { z500a: s('z500a'), v250: s('v250'), spd250: s('spd250'), psl: s('psl'), lwa: s('lwa_a'), lwa_c: s('lwa_c'),
+    z5: ref.z5, region: ref.region };
+}
 
 export const panelTitle = (p, style) => p.title(style);
 
@@ -132,8 +145,8 @@ function drawMarker(ctx, map, ev, s) {
   strokePaths(ctx, X, { color: '#000', width: 1.6 * s });
 }
 
-// One map: `key` is a PANELS key; `f` holds the window arrays of the frame (z500a, v250, spd250, psl) and of the
-// five-day mean (z5, region).
+// One map: `key` is a PANELS key; `f` holds the window arrays of the frame (z500a, v250, spd250, psl, lwa, lwa_c) and
+// of the five-day mean (z5, region).
 export function drawPanel(ctx, map, idx, ev, f, key, s = 1, { labels = true } = {}) {
   const g = idx.grid, st = idx.style, p = PANELS.find((x) => x.key === key), img = ctx.createImageData(map.w, map.h);
   if (p.shade) shadePixels(f[key], map, g, idx.cmaps[st[p.shade].cmap], st[p.shade].lim, img.data);
@@ -146,7 +159,8 @@ export function drawPanel(ctx, map, idx, ev, f, key, s = 1, { labels = true } = 
     const lv = levelsFor(f.psl, step(st.psl.contours));
     drawLevels(ctx, map, g, ev, f.psl, lv.filter((x) => x !== 1000), STYLE.isobar, s);
     drawLevels(ctx, map, g, ev, f.psl, lv.filter((x) => x === 1000), STYLE.isobar1000, s);
-  } else drawLevels(ctx, map, g, ev, regionField(f.z5, f.region, 0.5 * ev.M_y), [0.5 * ev.M_y], STYLE.region, s);
+  } else if (key === 'lwa') drawLevels(ctx, map, g, ev, f.lwa_c, levelsFor(f.lwa_c, st.lwa_c.step, { skipZero: true }), STYLE.lwa, s);
+  else drawLevels(ctx, map, g, ev, regionField(f.z5, f.region, 0.5 * ev.M_y), [0.5 * ev.M_y], STYLE.region, s);
   drawGraticule(ctx, map, s, labels);
   if (key === 'z500a' || key === 'z5') drawBox(ctx, map, ev, s);
   drawMarker(ctx, map, ev, s);

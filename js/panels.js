@@ -1,10 +1,11 @@
-// The four synchronized maps of one event (owner O5, V1, V2; plan R6, R7, R13): Z500 anomaly, 250 hPa wind with the
-// jet, SLP isobars and the five-day-mean reference, polar stereographic at the device pixel ratio, drawn by js/draw.js.
+// The five synchronized maps of one event (owner O5, V1, V2; plan R6, R7, R13; BLOCKFORM02 R11): Z500 anomaly, 250 hPa
+// wind with the jet, SLP isobars, 250 hPa local wave activity and the five-day-mean reference, polar stereographic at
+// the device pixel ratio, drawn by js/draw.js.
 // `lonC` (Compare's common centre) recentres every map; null keeps the event's own centre.
 import { el, fmt } from './ui.js';
 import { aspect, drawColorbar, pixelMap } from './render.js';
-import { PANELS, drawPanel, panelTitle } from './draw.js';
-import { frameSlice } from './data.js';
+import { PANELS, drawPanel, frameFields, panelTitle } from './draw.js';
+import { varMeta } from './data.js';
 import { bilinear, colIndex, lonLabel, rowCoord } from './geo.js';
 
 export const dprOf = () => Math.min(globalThis.devicePixelRatio || 1, 2);
@@ -15,7 +16,7 @@ export function colorbarFor(idx, p) {
     const d = idx.style.psl.contours[1] - idx.style.psl.contours[0];
     return { node: el('p', { class: 'legend' }, `Isobars every ${d} hPa; 1000 hPa bold`), paint() {} };
   }
-  const st = idx.style[p.shade], units = idx.vars.find((v) => v.key === p.shade).units;
+  const st = idx.style[p.shade], units = varMeta(idx, p.shade).units;
   const node = el('canvas', { class: 'cbar', width: 320, height: 34, 'aria-hidden': 'true' });
   return { node, paint: () => drawColorbar(node, idx.cmaps[st.cmap], st.lim, units, dprOf()) };
 }
@@ -62,8 +63,7 @@ export class PanelSet {
   setCentre(lonC) { this.lonC = lonC; this.map = null; this.resize(); this.draw(this.k); }
 
   fields(k) {
-    const g = this.idx.grid, v = this.data.vars, s = (key) => frameSlice(v[key], k, g.nrow, g.ncol);
-    return { z500a: s('z500a'), v250: s('v250'), spd250: s('spd250'), psl: s('psl'), z5: this.ref.z5, region: this.ref.region };
+    return frameFields(this.idx, this.data.vars, k, this.ref);
   }
 
   draw(k) {
@@ -92,8 +92,10 @@ export class PanelSet {
     const i = rowCoord(lat, g.lat), j = colIndex(lon, this.ev.lon0, g.dlon, g.ncol);
     if (!Number.isFinite(j)) { readout.textContent = `${where} · outside this event’s data window`; return; }
     const f = this.fields(this.k), at = (a) => bilinear(a, g.nrow, g.ncol, i, j);
-    readout.textContent = this.figs[n].p.static ? `${where} · z̄ ${fmt(at(f.z5), 0)} m`
-      : `${where} · Z500′ ${fmt(at(f.z500a), 0)} m · v ${fmt(at(f.v250))} · |V| ${fmt(at(f.spd250))} m s⁻¹ · SLP ${fmt(at(f.psl))} hPa`;
+    const p = this.figs[n].p;
+    readout.textContent = p.static ? `${where} · z̄ ${fmt(at(f.z5), 0)} m`
+      : p.key === 'lwa' ? `${where} · LWA anticyclonic ${fmt(at(f.lwa))} · cyclonic ${fmt(at(f.lwa_c))} m s⁻¹`
+        : `${where} · Z500′ ${fmt(at(f.z500a), 0)} m · v ${fmt(at(f.v250))} · |V| ${fmt(at(f.spd250))} m s⁻¹ · SLP ${fmt(at(f.psl))} hPa`;
   }
 
   destroy() { this.ro.disconnect(); this.root.remove(); }

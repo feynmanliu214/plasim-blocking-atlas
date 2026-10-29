@@ -8,9 +8,9 @@ import { fileURLToPath } from 'node:url';
 import { inflateSync } from 'node:zlib';
 import { projector } from '../js/proj.js';
 import { domainOf } from '../js/geo.js';
-import { PANELS, drawPanel } from '../js/draw.js';
+import { PANELS, drawPanel, frameFields } from '../js/draw.js';
 import { pixelMap } from '../js/render.js';
-import { decodeEvent, frameSlice, loadThumbs, validateIndex } from '../js/data.js';
+import { decodeEvent, loadThumbs, validateIndex } from '../js/data.js';
 import { Raster } from '../tools/raster.mjs';
 import { writeSite } from './fixture.mjs';
 
@@ -50,7 +50,7 @@ function pngPixels(buf) {
   return (x, y) => [...raw.subarray(y * (4 * w + 1) + 1 + 4 * x, y * (4 * w + 1) + 5 + 4 * x)];   // filter 0 rows (tools/png.mjs)
 }
 
-test('render-frame draws the page’s four maps with js/draw.js: north towards the top, × on the centre meridian, SLP unshaded', () => {
+test('render-frame draws the page’s five maps in 3 × 2 tiles with js/draw.js: north towards the top, × on the centre meridian, SLP unshaded', () => {
   const dir = mkdtempSync(join(tmpdir(), 'atlas-'));
   try {
     const idx = writeSite(dir), ev = idx.events[0];
@@ -59,7 +59,7 @@ test('render-frame draws the page’s four maps with js/draw.js: north towards t
     assert.equal(r.status, 0, r.stderr);
     const png = readFileSync(out);
     assert.deepEqual([...png.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-    assert.equal(png.readUInt32BE(16), 1440);
+    assert.equal(png.readUInt32BE(16), 2160);
     assert.equal(png.readUInt32BE(20), 1080);
     const px = pngPixels(png);
     assert.deepEqual(px(360, 4), [222, 218, 210, 255]);                  // above the pole, beyond ± 120°: the page background
@@ -68,9 +68,10 @@ test('render-frame draws the page’s four maps with js/draw.js: north towards t
     const c = px(Math.floor(x), Math.floor(y));
     assert.ok(c[0] < 60 && c[1] < 60 && c[2] < 60, `× pixel ${c}`);
     for (const [u, v] of [[360, 400], [300, 300], [420, 450]]) {          // tile 2 (SLP): paper or grey lines only
-      const q = px(u, 540 + v);
+      const q = px(1440 + u, v);
       assert.ok(Math.abs(q[0] - q[1]) <= 2 && Math.abs(q[1] - q[2]) <= 2, `SLP pixel ${q}`);
     }
+    assert.deepEqual(px(2160 - 10, 1080 - 10), [222, 218, 210, 255]); // the empty sixth tile is the background
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -83,14 +84,14 @@ test('every render-frame tile is drawPanel on a Raster flattened over the page b
     const px = pngPixels(readFileSync(out));
     const idx = validateIndex(JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'))), ev = idx.events[0], g = idx.grid;
     const buf = (p) => { const b = readFileSync(p); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); };
-    const v = decodeEvent(buf(join(dir, ev.file)), idx), s = (key) => frameSlice(v[key], 30, g.nrow, g.ncol);
+    const v = { ...decodeEvent(buf(join(dir, ev.file)), idx), ...decodeEvent(buf(join(dir, ev.lwa_file)), idx, idx.lwa.vars) };
     const th = await loadThumbs(idx, `${dir}/`, async (p) => ({ ok: true, arrayBuffer: async () => buf(p) }));
-    const f = { z500a: s('z500a'), v250: s('v250'), spd250: s('spd250'), psl: s('psl'), z5: th.z5(ev.thumb), region: th.region(ev.thumb) };
+    const f = frameFields(idx, v, 30, { z5: th.z5(ev.thumb), region: th.region(ev.thumb) });
     const map = pixelMap(g, ev, 720, 540);
     PANELS.forEach((p, m) => {
       const R = new Raster(720, 540);
       drawPanel(R, map, idx, ev, f, p.key, 1);
-      const want = R.flatten('#dedad2'), ox = (m % 2) * 720, oy = Math.floor(m / 2) * 540;
+      const want = R.flatten('#dedad2'), ox = (m % 3) * 720, oy = Math.floor(m / 3) * 540;
       let bad = 0;
       for (let y = 0; y < 540; y++) for (let x = 0; x < 720; x++) {
         const got = px(ox + x, oy + y);

@@ -1,5 +1,5 @@
-// One event (owner O3-O5, O8 A; plan R7): the sticky timeline and series strip over the four maps (the fourth is the
-// five-day mean with the region and centre, interview I4), its metadata, and its notes (O8 C).
+// One event (owner O3-O5, O8 A; plan R7; BLOCKFORM02 R11): the sticky timeline and series strip over the five maps (the
+// last is the five-day mean with the region and centre, interview I4), its metadata, and its notes (O8 C).
 import { el, fmt, groupLabel, rankText, rpText } from './ui.js';
 import { Player, follow } from './player.js';
 import { PanelSet } from './panels.js';
@@ -37,6 +37,8 @@ export function renderEvent(root, app, route) {
     const panels = new PanelSet(main, app.idx, data, { z5: app.thumbs.z5(ev.thumb), region: app.thumbs.region(ev.thumb) });
     // The canvases' width cap is the viewport height left under the sticky bar, minus two rows of captions, readouts,
     // colour bars and the row gap, all measured, times the map aspect; below 900 px the grid is one column, uncapped.
+    // With five maps the grid has two rows from 1200 px (three columns) and three between 900 and 1200 px; the cap
+    // keeps two rows on screen either way.
     const fit = () => {
       if (innerWidth <= 900) { panels.root.style.removeProperty('--map-max-w'); return; }
       const f = panels.figs[0], extra = f.fig.getBoundingClientRect().height - f.canvas.getBoundingClientRect().height;
